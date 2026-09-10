@@ -436,7 +436,9 @@ const ACT = {
   more: () => moreSheet(),
   reset: () => { if (LIVE) return; cancelDeletion(); closeDialog(); const r = state.role; state = seed(); state.role = r; state.meId = state.members.find(m => m.role === r).id; save(); render(); toast('Demo data reset'); },
   'sign-out': () => { if (LIVE) { closeDialog(); signOut(); } },
-  'login-link': () => sendLoginLink(loginEmail()),
+  'login-code': () => sendLoginCode(loginEmail()),
+  'login-resend': el => sendLoginCode(el.dataset.email).then(() => { const m = $('#l-msg'); if (m && !m.innerHTML) m.innerHTML = '<span class="faint">New code sent. Use the latest email.</span>'; }),
+  'login-back': () => showLogin(),
   'change-password': () => { if (!LIVE) return;
     openDialog(`<form data-form="change-password" novalidate>${dHead('Change your password', `For <span class="mono">${esc(me().email)}</span>`)}
       <div class="dlg-body"><input type="email" name="username" value="${esc(me().email)}" autocomplete="username" hidden>
@@ -449,7 +451,7 @@ const ACT = {
   'admin-edit': el => openAdminEdit(el.dataset.id),
   'admin-disable': el => runAdmin('disable', {id:el.dataset.id}, 'Login disabled', 'they can’t sign in or see any data'),
   'admin-enable': el => runAdmin('enable', {id:el.dataset.id}, 'Login re-enabled'),
-  'admin-resend': el => runAdmin('resend', {id:el.dataset.id}, 'Sign-in link sent', LIVE ? '' : 'simulated in the demo'),
+  'admin-resend': el => runAdmin('resend', {id:el.dataset.id}, 'Sign-in code sent', LIVE ? 'they enter it on the sign-in screen' : 'simulated in the demo'),
   'admin-remove': el => requestDeletion('member', el.dataset.id),
   notif: () => openNotifications(),
   'notif-open': el => { const a = el.dataset.a, id = el.dataset.id;
@@ -654,6 +656,7 @@ const FORMS = {
   },
   member(f, fd) { if (!oversight()) return closeDialog(); member(f.dataset.id).responsibility = fd.get('responsibility').trim(); finish('Responsibility updated'); },
   login(f, fd) { if (LIVE) passwordSignIn(String(fd.get('email') || ''), String(fd.get('password') || '')); },
+  'login-code'(f, fd) { if (LIVE) verifyLoginCode(f.dataset.email, String(fd.get('code') || '')); },
   async 'set-password'(f, fd) {
     const btn = f.querySelector('.btn-primary'); btn.disabled = true;
     const ok = await savePassword(String(fd.get('password') || ''), String(fd.get('again') || ''), $('#p-msg'));
@@ -684,7 +687,7 @@ const FORMS = {
     const p = {name:String(fd.get('name')).trim(), email:String(fd.get('email')).trim(), role:fd.get('role'), team:fd.get('team'), is_admin:!!fd.get('is_admin')};
     if (!p.name) { $('#aerr').textContent = 'Add their name.'; return; }
     if (!/^[^@\s]+@aus\.edu$/i.test(p.email)) { $('#aerr').textContent = 'Use an @aus.edu email address.'; return; }
-    runAdmin('invite', p, `Invited ${p.name}`, LIVE ? `sign-in link sent to ${p.email}` : 'simulated — no email sent');
+    runAdmin('invite', p, `Invited ${p.name}`, LIVE ? `invitation sent to ${p.email}` : 'simulated — no email sent');
   },
   'admin-edit'(f, fd) {
     if (!isAdmin()) return closeDialog();

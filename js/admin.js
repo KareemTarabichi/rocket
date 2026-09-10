@@ -58,11 +58,11 @@ function vAdmin() {
       <div>${adminData.log.slice(0, 50).map(l => `<div class="notif ${l.action === 'remove' || l.action === 'disable' ? 'cancel' : ''}"><span class="k">${esc(actor(l.actor))} · ${esc(ADMIN_ACTION[l.action] || l.action)} ${esc(l.target_email)}</span><time>${fmtStamp(l.created_at)}</time>${l.details ? `<span class="d">${esc(l.details)}</span>` : ''}</div>`).join('') || '<div class="empty">No admin actions yet.</div>'}</div></section>
   </div>`;
 }
-const ADMIN_ACTION = {invite:'invited', update:'updated', disable:'disabled the login of', enable:'re-enabled the login of', resend:'resent a sign-in link to', remove:'removed'};
+const ADMIN_ACTION = {invite:'invited', update:'updated', disable:'disabled the login of', enable:'re-enabled the login of', resend:'sent a sign-in code to', remove:'removed'};
 
 function openAdminInvite() {
   if (!isAdmin()) return;
-  openDialog(`<form data-form="admin-invite" novalidate>${dHead('Invite a member', 'They get an email with a sign-in link. Only @aus.edu addresses can join.')}
+  openDialog(`<form data-form="admin-invite" novalidate>${dHead('Invite a member', 'They get an invitation email, then sign in with a code and set a password. Only @aus.edu addresses can join.')}
     <div class="dlg-body">
       ${field('Full name', inp('name', '', 'required autocomplete="off"'), 'f-name')}
       ${field('AUS email', inp('email', '', 'type="email" required placeholder="g000xxxxx@aus.edu" autocomplete="off"'), 'f-email')}
@@ -86,9 +86,9 @@ function openAdminEdit(id) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${st === 'disabled' ? `<button type="button" class="btn sm" data-act="admin-enable" data-id="${m.id}">Enable login</button>`
             : `<button type="button" class="btn sm" data-act="admin-disable" data-id="${m.id}" ${self || lastAdmin ? `disabled title="${self ? 'You can’t disable your own login' : 'Rocket needs at least one active admin'}"` : ''}>Disable login</button>`}
-          ${st !== 'disabled' ? `<button type="button" class="btn sm" data-act="admin-resend" data-id="${m.id}">${st === 'invited' ? 'Resend invite' : 'Send sign-in link'}</button>` : ''}
+          ${st !== 'disabled' ? `<button type="button" class="btn sm" data-act="admin-resend" data-id="${m.id}">Send sign-in code</button>` : ''}
         </div>
-        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. Members set their own password after their first sign-in link. If someone forgets it, send them a sign-in link and they’ll be asked to set a new one.</span></div>
+        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. Members sign in the first time with an emailed code, then set their own password. If someone forgets it, send them a sign-in code and they’ll be asked to set a new one.</span></div>
       <span class="err" id="aerr" role="alert"></span>
     </div>
     ${foot('<button class="btn btn-primary">Save changes</button>', `<button type="button" class="btn btn-del" data-act="admin-remove" data-id="${m.id}" ${self || lastAdmin ? 'disabled' : ''}>${ic('trash')}Remove member</button>`)}</form>`, 'narrow');

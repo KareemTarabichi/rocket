@@ -112,24 +112,25 @@ async function syncFailed(error) {
 }
 
 /* ---- auth ---- */
-// Sign-in: email + password everywhere (it works inside the home-screen app, where emailed links
-// can't reach). First-timers and anyone who forgot their password use an emailed link, then set one.
-function showLogin(msg = '') {
+// Sign-in: email + password everywhere. First-timers, and anyone who forgot their password, get a
+// one-time 6-digit code by email instead of a link: email security scanners (e.g. Microsoft 365's
+// Safe Links at AUS) open links to check them, which uses up a one-time link before the member taps it.
+// A code also works inside the home-screen app, which can't receive links.
+function showLogin(msg = '', email = '') {
   state = null; document.body.classList.add('is-login');
   if (dlg().open) dlg().close();
-  const inApp = typeof isStandalone === 'function' && isStandalone();
   $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
     <form class="login-card" data-form="login" novalidate>
       ${BRAND}
       <div><h1>Sign in to Rocket</h1><p style="margin-top:6px">The ops hub for AUS Launchpad.</p></div>
-      <div class="field"><label for="l-email">AUS email</label><input class="input" id="l-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="g000xxxxx@aus.edu" required></div>
+      <div class="field"><label for="l-email">AUS email</label><input class="input" id="l-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="g000xxxxx@aus.edu" value="${esc(email)}" required></div>
       <div class="field"><label for="l-pass">Password</label><input class="input" id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
       <div id="l-msg" role="status">${msg}</div>
       <button class="btn btn-primary" style="justify-content:center">Sign in</button>
       <div class="login-alt">
         <span>First time here, or forgot your password?</span>
-        <button type="button" class="btn" data-act="login-link" style="justify-content:center">Email me a sign-in link</button>
-        ${inApp ? '<span class="faint" style="font-size:12px">The link opens in your browser. Set your password there, then come back to this app and sign in.</span>' : '<span class="faint" style="font-size:12px">You’ll set a password after the link signs you in. Only members an admin has invited can sign in.</span>'}
+        <button type="button" class="btn" data-act="login-code" style="justify-content:center">Email me a sign-in code</button>
+        <span class="faint" style="font-size:12px">We’ll email you a 6-digit code. Enter it here, then set a password. Only members an admin has invited can sign in.</span>
       </div>
     </form></div>`;
 }
@@ -142,23 +143,58 @@ async function passwordSignIn(email, password) {
   const out = $('#l-msg');
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@aus\.edu$/.test(email)) { out.innerHTML = '<span class="err">Use your @aus.edu address.</span>'; return; }
-  if (!password) { out.innerHTML = '<span class="err">Enter your password — or use the sign-in link below if you haven’t set one yet.</span>'; return; }
+  if (!password) { out.innerHTML = '<span class="err">Enter your password — or tap “Email me a sign-in code” if you haven’t set one yet.</span>'; return; }
   out.innerHTML = '<span class="faint">Signing in…</span>';
   const {error} = await sb.auth.signInWithPassword({email, password});
-  if (error) out.innerHTML = `<span class="err">${/invalid|credentials/i.test(error.message) ? 'Wrong email or password. If you haven’t set a password yet, use “Email me a sign-in link”.' : esc(error.message)}</span>`;
+  if (error) out.innerHTML = `<span class="err">${/invalid|credentials/i.test(error.message) ? 'Wrong email or password. If you haven’t set a password yet, tap “Email me a sign-in code”.' : esc(error.message)}</span>`;
   // success is picked up by onAuthStateChange → enterApp
 }
-async function sendLoginLink(email) {
+async function sendLoginCode(email) {
   const out = $('#l-msg');
   email = (email || '').trim().toLowerCase();
   if (!/^[^@\s]+@aus\.edu$/.test(email)) { out.innerHTML = '<span class="err">Type your @aus.edu address above first.</span>'; $('#l-email')?.focus(); return; }
   out.innerHTML = '<span class="faint">Sending…</span>';
   const {error} = await sb.auth.signInWithOtp({email, options:{shouldCreateUser:false, emailRedirectTo:location.origin + '/'}});
-  if (error) { out.innerHTML = `<span class="err">${/signup|not allowed|not found/i.test(error.message) ? 'That email isn’t on Rocket yet. Ask an admin to invite you.' : /rate limit/i.test(error.message) ? 'Too many emails were sent just now. Try again in a little while.' : esc(error.message)}</span>`; return; }
-  out.innerHTML = `<div class="callout cyan">${ic('info')}<div>Check <b>${esc(email)}</b> and tap the link. It signs you in and asks you to set a password.</div></div>`;
+  if (error) { out.innerHTML = `<span class="err">${/signup|not allowed|not found/i.test(error.message) ? 'That email isn’t on Rocket yet. Ask an admin to invite you.' : /rate limit|seconds/i.test(error.message) ? 'A code was sent very recently. Wait a minute, then try again.' : esc(error.message)}</span>`; return; }
+  showCodeEntry(email);
+}
+function showCodeEntry(email, msg = '') {
+  document.body.classList.add('is-login');
+  $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
+    <form class="login-card" data-form="login-code" data-email="${esc(email)}" novalidate>
+      ${BRAND}
+      <div><h1>Check your email</h1><p style="margin-top:6px">We sent a sign-in code to <b>${esc(email)}</b>. It can take a minute to arrive — check Junk too.</p></div>
+      <div class="field"><label for="l-code">Sign-in code</label><input class="input mono" id="l-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="123456" style="font-size:22px;letter-spacing:.2em;height:52px;text-align:center" required></div>
+      <div id="l-msg" role="status">${msg}</div>
+      <button class="btn btn-primary" style="justify-content:center">Sign in</button>
+      <div class="login-alt" style="flex-direction:row;justify-content:space-between;align-items:center">
+        <button type="button" class="linkbtn" data-act="login-back">← Use a password instead</button>
+        <button type="button" class="linkbtn" data-act="login-resend" data-email="${esc(email)}">Send a new code</button>
+      </div>
+    </form></div>`;
+  setTimeout(() => $('#l-code')?.focus());
+}
+async function verifyLoginCode(email, code) {
+  const out = $('#l-msg');
+  code = (code || '').replace(/\D/g, '');
+  if (code.length < 6) { out.innerHTML = '<span class="err">Enter the code from the email.</span>'; return; }
+  out.innerHTML = '<span class="faint">Checking…</span>';
+  const {error} = await sb.auth.verifyOtp({email, token:code, type:'email'});
+  if (error) out.innerHTML = `<span class="err">${/expired|invalid/i.test(error.message) ? 'That code is wrong or has expired. Check the latest email, or send a new code.' : esc(error.message)}</span>`;
+  // success → onAuthStateChange → enterApp → set a password
+}
+// A link that fails (already used, expired) comes back with the reason in the address; say so instead of silently showing the login page.
+function linkErrorFromUrl() {
+  const h = new URLSearchParams(location.hash.slice(1)), q = new URLSearchParams(location.search);
+  const code = h.get('error_code') || q.get('error_code'), desc = h.get('error_description') || q.get('error_description');
+  if (!code && !desc) return '';
+  history.replaceState(null, '', location.pathname);
+  return /expired|invalid|otp/i.test(`${code} ${desc}`)
+    ? '<span class="err">That sign-in link had already been used or expired — AUS email sometimes opens links to scan them. Tap “Email me a sign-in code” below instead.</span>'
+    : `<span class="err">Sign-in didn’t work: ${esc((desc || code).replace(/\+/g, ' '))}</span>`;
 }
 
-// Shown after a link sign-in until the member has a password.
+// Shown after a code (or link) sign-in until the member has a password.
 function showSetPassword(msg = '') {
   document.body.classList.add('is-login');
   $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
@@ -181,7 +217,7 @@ async function savePassword(password, again, out) {
   const {error} = await sb.auth.updateUser({password, data:{password_set:true}});
   if (error) { out.innerHTML = `<span class="err">${/different/i.test(error.message) ? 'That’s your current password — pick a new one.'
     : /weak|short|characters/i.test(error.message) ? 'That password is too weak. Try a longer one.'
-    : /reauth|recent/i.test(error.message) ? 'For security, sign out, sign back in with “Email me a sign-in link”, then change your password.'
+    : /reauth|recent/i.test(error.message) ? 'For security, sign out, sign back in with “Email me a sign-in code”, then change your password.'
     : esc(error.message)}</span>`; return false; }
   return true;
 }
@@ -227,7 +263,7 @@ async function liveBoot() {
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') { entered = false; if (state) showLogin('<span class="faint">Your session ended. Sign in again.</span>'); return; }
     if (session && !entered && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) { entered = true; setTimeout(() => enterApp(session)); }
-    if (!session && event === 'INITIAL_SESSION') showLogin();
+    if (!session && event === 'INITIAL_SESSION') showLogin(linkErrorFromUrl());
   });
   registerSW();
   // Pick up other members' changes when you come back to the tab.
