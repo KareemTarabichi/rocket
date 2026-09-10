@@ -43,7 +43,7 @@ function openMeeting(id) {
       <fieldset class="fieldset"><legend>Invite</legend>
         <label class="cbox"><input type="checkbox" name="all" ${v.mode === 'all' ? 'checked' : ''}>All members</label>
         <div class="field"><span class="lbl">Teams</span><div class="checks">${TEAMS.map(t => `<label class="cbox"><input type="checkbox" name="team" value="${t.id}" ${v.teamIds.includes(t.id) ? 'checked' : ''}>${esc(t.name)} <span class="faint">(${teamMembers(t.id).length})</span></label>`).join('')}</div></div>
-        <div class="field"><span class="lbl">Individuals</span><div class="checks">${state.members.map(x => `<label class="cbox"><input type="checkbox" name="att" value="${x.id}" ${v.attendees.includes(x.id) ? 'checked' : ''}>${esc(x.name.split(' ')[0])} <span class="faint">${esc(roleLabel(x.role))}</span></label>`).join('')}</div></div>
+        <div class="field"><span class="lbl">Individuals</span><div class="checks">${state.members.map(x => `<label class="cbox"><input type="checkbox" name="att" value="${x.id}" ${v.attendees.includes(x.id) || (v.teamIds.includes(x.team) && x.active !== false) ? 'checked' : ''}>${esc(x.name.split(' ')[0])} <span class="faint">${esc(roleLabel(x.role))}</span></label>`).join('')}</div></div>
         <span class="count-line" id="rcount"></span>
       </fieldset>
       <span class="err" id="merr" role="alert"></span>
@@ -53,11 +53,17 @@ function openMeeting(id) {
   updateRecipientCount();
 }
 function formAudience(form) { const fd = new FormData(form); return {mode: fd.get('all') ? 'all' : 'custom', teamIds: fd.getAll('team'), attendees: fd.getAll('att')}; }
+// Ticking a team ticks its members; a team stays ticked only while all its members are.
+function syncMeetingTeams(form, changed) {
+  const atts = [...form.querySelectorAll('input[name=att]')];
+  if (changed?.name === 'team') { const ids = teamMembers(changed.value); atts.forEach(i => { if (ids.includes(i.value)) i.checked = changed.checked; }); }
+  form.querySelectorAll('input[name=team]').forEach(t => { const boxes = atts.filter(i => teamMembers(t.value).includes(i.value)); t.checked = boxes.length > 0 && boxes.every(i => i.checked); });
+}
 function updateRecipientCount() {
   const form = $('form[data-form="meeting"]'); if (!form) return;
   const a = formAudience(form), n = recipients(a).length, el = $('#rcount');
   form.querySelectorAll('input[name=team], input[name=att]').forEach(i => i.disabled = a.mode === 'all');
-  el.textContent = n ? `${n} unique ${n === 1 ? 'attendee' : 'attendees'}${a.mode !== 'all' && a.teamIds.length && a.attendees.length ? ' (duplicates removed)' : ''}` : 'Pick at least one person or team';
+  el.textContent = n ? `${n} unique ${n === 1 ? 'attendee' : 'attendees'}` : 'Pick at least one person or team';
   el.classList.toggle('zero', !n);
 }
 
@@ -179,10 +185,14 @@ function openStartup(id) {
   renderStartupForm();
 }
 function renderStartupForm() {
-  const v = draft, one = v.contacts.length === 1;
+  const v = draft, one = v.contacts.length === 1, del = v.deletion, approver = canApproveStartupDeletion();
   const keep = dlg().open ? dlg().scrollTop : 0;
+  const delBanner = del ? `<div class="del-pending"><div><b>Deletion requested</b> by ${esc(member(del.by)?.name || 'a member')} · ${fmtStamp(del.at)}${del.reason ? `<br><span class="muted">“${esc(del.reason)}”</span>` : ''}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${approver ? `<button type="button" class="btn sm btn-danger-solid" data-act="startup-approve" data-id="${v.id}">Approve & delete</button><button type="button" class="btn sm" data-act="startup-keep" data-id="${v.id}">Keep startup</button>`
+        : del.by === me().id ? `<button type="button" class="btn sm" data-act="startup-keep" data-id="${v.id}">Cancel my request</button><span class="faint" style="font-size:12.5px;align-self:center">Waiting for an admin or the President</span>` : '<span class="faint" style="font-size:12.5px">Waiting for an admin or the President to decide.</span>'}</div></div>` : '';
+  const delBtn = v._new || del ? '' : `<button type="button" class="btn btn-del" data-act="startup-delete" data-id="${v.id}">${ic('trash')}${approver ? 'Delete startup' : 'Request deletion'}</button>`;
   openDialog(`<form data-form="startup">${dHead(v._new ? 'Add startup' : v.name || 'Startup', v._new ? '' : (missingContact(v) ? '<span class="review">Missing contact details</span>' : 'Contact details complete'))}
-    <div class="dlg-body">
+    <div class="dlg-body">${delBanner}
       <div class="grid2">${field('Company', `<input class="input" id="f-sname" data-d="name" value="${esc(v.name)}" required>`, 'f-sname')}${field('Sector', `<input class="input" id="f-sector" data-d="sector" value="${esc(v.sector)}">`, 'f-sector')}</div>
       <div class="sect"><span class="eyebrow">Contacts · exactly one primary</span>
         ${v.contacts.map(c => `<div class="contact-edit">
@@ -194,8 +204,26 @@ function renderStartupForm() {
       <div class="field"><span class="lbl">Previous events attended</span><div class="checks">${PAST_EVENTS.map(e => `<label class="cbox"><input type="checkbox" data-att="${esc(e)}" ${v.attendance.includes(e) ? 'checked' : ''}>${esc(e)}</label>`).join('')}</div></div>
       ${field('Notes', `<textarea class="input" id="f-snotes" data-d="notes" rows="4">${esc(v.notes)}</textarea>`, 'f-snotes')}
       ${v.rating != null ? `<span class="muted-note">Overall rating from the sheet: ${v.rating}/10</span>` : ''}
-    </div>${foot(`<button class="btn btn-primary">${v._new ? 'Add startup' : 'Save startup'}</button>`)}</form>`);
+    </div>${foot(`<button class="btn btn-primary">${v._new ? 'Add startup' : 'Save startup'}</button>`, delBtn)}</form>`);
   dlg().scrollTop = keep;
+}
+// Non-approvers ask for deletion; an admin or the President approves or keeps it.
+function openDeletionRequest(id) {
+  const s = state.startups.find(x => x.id === id); if (!s) return;
+  pendingDeletion = null;
+  const c = $('#confirm');
+  c.innerHTML = `<div class="dlg-head"><div style="flex:1"><h2>Ask to delete “${esc(s.name)}”?</h2><div class="sub">An admin or the President has to approve it. Nothing is deleted until then.</div></div></div>
+    <div class="dlg-body">${field('Why should it go?', '<textarea class="input" id="del-reason" rows="3" placeholder="e.g. Duplicate of another record, or the company has closed"></textarea>', 'del-reason')}</div>
+    <div class="dlg-foot"><span class="spacer"></span><button type="button" class="btn" data-act="del-cancel">Cancel</button><button type="button" class="btn btn-primary" data-act="startup-request-send" data-id="${s.id}">Send for approval</button></div>`;
+  c.showModal();
+}
+function setStartupDeletion(id, value) {
+  const s = state.startups.find(x => x.id === id); if (!s) return null;
+  s.deletion = value;
+  if (draft && draft.id === id) { draft.deletion = value; if (dlg().open && $('form[data-form="startup"]')) renderStartupForm(); }
+  save(); render();
+  if (dlg().open && dlg().classList.contains('notif-pop')) openNotifications();
+  return s;
 }
 
 /* ---------- budget ---------- */
@@ -238,21 +266,100 @@ function openMember(id) {
     ${foot(oversight() ? '<button class="btn btn-primary">Save responsibility</button>' : '')}</form>`, 'narrow');
 }
 function openKB(id) {
-  const a = KB.find(x => x.id === id);
+  const a = state.kb.find(x => x.id === id); if (!a) return;
+  const by = member(a.updatedBy)?.name;
   openDialog(`${dHead(a.title, esc(a.summary), `<span class="tag">${esc(a.category)}</span>${a.roles.includes(state.role) ? '<span class="tag for-you">For your role</span>' : ''}`)}
-    <div class="dlg-body"><ol class="steps">${a.steps.map(s => `<li><span>${esc(s)}</span></li>`).join('')}</ol>
-      <span class="muted-note">Illustrative club guidance — not official university policy.</span></div>${foot('')}`);
+    <div class="dlg-body"><div class="md">${mdToHtml(a.body)}</div>
+      <span class="kb-meta">${a.updatedAt ? `Last updated ${fmtStamp(a.updatedAt)}${by ? ` by ${esc(by)}` : ''} · ` : ''}Club guidance, not official university policy.</span></div>
+    ${isAdmin() ? foot(`<button type="button" class="btn btn-primary" data-act="kb-edit" data-id="${a.id}">${ic('edit')}Edit article</button>`, `<button type="button" class="btn btn-del" data-act="kb-delete" data-id="${a.id}">${ic('trash')}Delete</button>`) : foot('')}`);
+}
+function openKBEditor(id) {
+  if (!isAdmin()) return toast('Only admins can edit the knowledge base', '', true);
+  const a = id ? state.kb.find(x => x.id === id) : null;
+  draft = a ? {...a, roles:[...a.roles], _preview:false} : {id:uid('kb'), title:'', category:'', roles:[], summary:'', body:'## What this covers\n\nWrite the steps below.\n\n1. First step\n2. Second step', _new:true, _preview:false};
+  renderKBEditor();
+}
+function renderKBEditor() {
+  const v = draft, cats = [...new Set(state.kb.map(a => a.category).filter(Boolean))].sort();
+  const keep = dlg().open ? dlg().scrollTop : 0;
+  openDialog(`<form data-form="kb" novalidate>${dHead(v._new ? 'New article' : 'Edit article', 'Formatting uses Markdown. The toolbar inserts it for you.')}
+    <div class="dlg-body">
+      ${field('Title', `<input class="input" id="f-kbtitle" data-d="title" value="${esc(v.title)}" required>`, 'f-kbtitle')}
+      <div class="grid2">${field('Category', `<input class="input" id="f-kbcat" data-d="category" value="${esc(v.category)}" list="kb-cats" placeholder="e.g. Event planning"><datalist id="kb-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`, 'f-kbcat')}
+        ${field('One-line summary', `<input class="input" id="f-kbsum" data-d="summary" value="${esc(v.summary)}" placeholder="Shown on the article card">`, 'f-kbsum')}</div>
+      <div class="field"><span class="lbl">Show first for these roles <span class="faint">(everyone can read every article)</span></span><div class="checks">${ROLES.map(r => `<label class="cbox"><input type="checkbox" data-kbrole="${r.id}" ${v.roles.includes(r.id) ? 'checked' : ''}>${esc(r.label)}</label>`).join('')}</div></div>
+      <div class="field"><div style="display:flex;justify-content:space-between;align-items:end;gap:8px"><span class="lbl">Article</span>${seg('kb-tab', v._preview ? 'preview' : 'write', [['write','Write'], ['preview','Preview']])}</div>
+        <div>${v._preview ? `<div class="md-preview md">${mdToHtml(v.body) || '<span class="faint">Nothing to preview yet.</span>'}</div>` : `
+          <div class="md-toolbar" role="toolbar" aria-label="Formatting">
+            <button type="button" data-act="md" data-md="bold" title="Bold"><b>B</b></button><button type="button" data-act="md" data-md="italic" title="Italic"><i>I</i></button>
+            <button type="button" data-act="md" data-md="h2" title="Heading">H</button><span class="sep"></span>
+            <button type="button" data-act="md" data-md="ul" title="Bulleted list">• List</button><button type="button" data-act="md" data-md="ol" title="Numbered steps">1. Steps</button>
+            <button type="button" data-act="md" data-md="quote" title="Callout">❝ Note</button><button type="button" data-act="md" data-md="hr" title="Divider">—</button><span class="sep"></span>
+            <button type="button" data-act="md" data-md="link" title="Link">${ic('link')}Link</button>
+            <button type="button" data-act="md" data-md="image" title="Image from a web address">${ic('image')}Image link</button>
+            <label title="Upload an image">${ic('plus')}Upload image<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-change="kb-image" style="display:none"></label>
+          </div>
+          <textarea class="input md-editor" id="kb-body" data-d="body" rows="14" aria-label="Article text">${esc(v.body)}</textarea>`}</div>
+        <span class="muted-note">**bold** · *italic* · ## heading · - list · 1. steps · > note · [text](https://link) · ![caption](https://image)</span></div>
+      <span class="err" id="kberr" role="alert"></span>
+    </div>${foot(`<button class="btn btn-primary">${v._new ? 'Publish article' : 'Save article'}</button>`)}</form>`);
+  dlg().scrollTop = keep;
+}
+// Wraps or prefixes the selected text in the editor with Markdown.
+function mdInsert(kind, text) {
+  const ta = $('#kb-body'); if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e);
+  const lead = s > 0 && ta.value[s - 1] !== '\n' ? '\n' : '';
+  const lines = (pre, ph) => lead + (sel || ph).split('\n').map((l, i) => (typeof pre === 'function' ? pre(i) : pre) + l).join('\n');
+  let ins, from, to;
+  if (kind === 'bold' || kind === 'italic') { const m = kind === 'bold' ? '**' : '*', t = sel || (kind === 'bold' ? 'bold text' : 'italic text'); ins = m + t + m; from = m.length; to = from + t.length; }
+  else if (kind === 'link') { const t = sel || 'link text'; ins = `[${t}](https://)`; from = t.length + 3; to = from + 8; }
+  else if (kind === 'image') { ins = `${lead}![${sel || 'Image description'}](https://)\n`; from = ins.length - 9; to = ins.length - 2; }
+  else if (kind === 'upload') { ins = `${lead}![${text.alt}](${text.url})\n`; from = to = ins.length; }
+  else if (kind === 'hr') { ins = `${lead}\n---\n`; from = to = ins.length; }
+  else { ins = kind === 'h2' ? lines('## ', 'Heading') : kind === 'ul' ? lines('- ', 'List item') : kind === 'ol' ? lines(i => `${i + 1}. `, 'Step') : lines('> ', 'Note'); from = lead.length; to = ins.length; }
+  ta.setRangeText(ins, s, e, 'end'); ta.focus(); ta.setSelectionRange(s + from, s + to);
+  if (draft) draft.body = ta.value;
+}
+async function insertKBImage(file) {
+  if (!file) return;
+  if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) return toast('Use a PNG, JPG, GIF or WebP image', '', true);
+  try {
+    let url;
+    if (LIVE) { if (file.size > 5e6) return toast('Images must be under 5 MB', '', true); toast('Uploading image…'); url = await uploadKbImage(file); }
+    else {
+      if (file.size > 7e5) return toast('The demo can only keep images under 700 KB — paste an image link instead', '', true);
+      url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+    }
+    mdInsert('upload', {alt:file.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, ''), url});
+  } catch (e) { toast('Couldn’t add the image: ' + e.message, '', true); }
+}
+
+/* ---------- notifications ---------- */
+function openNotifications() {
+  const items = attentionItems(), ups = updatesForMe().slice(0, 20), seen = lastSeen();
+  const row = it => it.kind === 'startup-deletion'
+    ? `<div class="nitem"><span class="dot over"></span><div><div class="lbl">${esc(it.label)}</div><div class="ttl">${esc(it.title)}</div><div class="sb">${esc(it.sub)}</div></div><span></span>
+        <div class="acts"><button type="button" class="btn sm btn-danger-solid" data-act="startup-approve" data-id="${it.id}">Approve deletion</button><button type="button" class="btn sm" data-act="startup-keep" data-id="${it.id}">Keep startup</button></div></div>`
+    : `<div class="nitem click" data-act="notif-open" data-a="${it.act}" data-id="${esc(it.id || '')}" tabindex="0"><span class="dot ${it.tone}"></span><div><div class="lbl">${esc(it.label)}</div><div class="ttl">${esc(it.title)}</div><div class="sb">${esc(it.sub)}</div></div><span class="faint" aria-hidden="true">›</span></div>`;
+  openDialog(`<div class="dlg-head"><div style="flex:1"><h2>Notifications</h2><div class="sub">${items.length ? `${items.length} ${items.length === 1 ? 'thing needs' : 'things need'} your attention` : 'Nothing needs you right now'}</div></div>${closeBtn()}</div>
+    <div style="padding-bottom:8px">${items.length ? `<div class="notif-sec">Needs your attention</div>${items.map(row).join('')}` : '<div class="empty">You’re all caught up.</div>'}
+      ${ups.length ? `<div class="notif-sec">Meeting updates</div>${ups.map(n => `<div class="nitem"><span class="dot ${new Date(n.at) > seen ? (n.kind === 'cancel' ? 'over' : '') : 'read'}"></span><div><div class="ttl">${esc(n.title)}</div><div class="sb">${esc(n.details)}</div></div><time>${fmtStamp(n.at)}</time></div>`).join('')}` : ''}</div>`, 'notif-pop');
+  markSeen(); render();
 }
 
 /* ================= deletion ================= */
-const deletionRecord = (kind, id) => kind === 'meeting' ? state.meetings.find(x => x.id === id) : kind === 'idea' ? state.ideas.find(x => x.id === id) : (adminData.members || state.members).find(x => x.id === id);
+const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb}[kind] || adminData.members || state.members).find(x => x.id === id);
+const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the owner, collaborators or leadership can delete this idea'};
 function requestDeletion(kind, id) {
   const rec = deletionRecord(kind, id);
-  if (!deletable(kind, rec)) { toast(kind === 'meeting' ? 'Only the Executive Assistant can delete meetings' : kind === 'member' ? 'You can’t remove yourself or the last admin' : 'Only the owner, collaborators or leadership can delete this idea', '', true); return; }
+  if (!deletable(kind, rec)) { toast(DENY[kind], '', true); return; }
   pendingDeletion = {kind, id};
-  const name = kind === 'member' ? rec.name : rec.title;
+  const name = kind === 'member' || kind === 'startup' ? rec.name : rec.title;
   const consequence = kind === 'meeting'
     ? `A cancellation notice goes to its ${recipients(rec).length} current attendees${state.calendar.connected ? ' and the calendar entry is cancelled (simulated)' : ''}. Past notifications stay in the log.`
+    : kind === 'startup' ? `Its contacts, notes and attendance history are deleted for everyone.${rec.deletion ? ` Requested by ${member(rec.deletion.by)?.name || 'a member'}${rec.deletion.reason ? `: “${rec.deletion.reason}”` : ''}.` : ''}`
+    : kind === 'kb' ? 'The article disappears for everyone. Any images uploaded for it stay in storage.'
     : kind === 'member' ? `${rec.name} (${rec.email}) loses access straight away. Anything they owned becomes unassigned, and they’re taken off meeting invites, event assignments and idea collaborators. To keep their history instead, disable their login.`
     : `Its next step${rec.next ? ` (“${rec.next}”)` : ''} disappears from Deadlines too. Separate follow-up tasks aren’t affected.`;
   const c = $('#confirm');
@@ -267,6 +374,8 @@ function confirmDeletion() {
   const rec = deletionRecord(p.kind, p.id);
   if (!deletable(p.kind, rec)) { cancelDeletion(); toast('That can’t be deleted with your current role', '', true); return; }
   if (p.kind === 'member') { cancelDeletion(); return runAdmin('remove', {id:rec.id}, `Removed ${rec.name}`, rec.email); }
+  if (p.kind === 'startup') { state.startups = state.startups.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted ${rec.name}`, 'removed from the directory'); }
+  if (p.kind === 'kb') { state.kb = state.kb.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted “${rec.title}”`); }
   if (p.kind === 'meeting') {
     notify('cancel', `Meeting cancelled: ${rec.title}`, `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`, recipients(rec));
     state.meetings = state.meetings.filter(x => x.id !== rec.id);
@@ -315,6 +424,28 @@ const ACT = {
   'admin-enable': el => runAdmin('enable', {id:el.dataset.id}, 'Login re-enabled'),
   'admin-resend': el => runAdmin('resend', {id:el.dataset.id}, 'Sign-in link sent', LIVE ? '' : 'simulated in the demo'),
   'admin-remove': el => requestDeletion('member', el.dataset.id),
+  notif: () => openNotifications(),
+  'notif-open': el => { const a = el.dataset.a, id = el.dataset.id;
+    if (a === 'go') return go(id);
+    if (a === 'notif-ideas') { filters.ideas = {team:'all', owner:'all', stage:'submitted', scope:'all'}; filters.ideaStageM = 'submitted'; return go('ideas'); }
+    if (a === 'notif-budget') return go('budget');
+    ACT[a]?.({dataset:{id}}); },
+  'drive-missing': () => { if (isAdmin()) { go('admin'); toast('Add the Design Drive link under Links'); } else toast('No Design Drive link yet — ask an admin to add it', '', true); },
+  'startup-delete': el => canApproveStartupDeletion() ? requestDeletion('startup', el.dataset.id) : openDeletionRequest(el.dataset.id),
+  'startup-approve': el => requestDeletion('startup', el.dataset.id),
+  'startup-request-send': el => { const reason = ($('#del-reason')?.value || '').trim();
+    if (!access('startups')) return;
+    cancelDeletion(); setStartupDeletion(el.dataset.id, {by:me().id, at:new Date().toISOString(), reason});
+    toast('Deletion requested', 'an admin or the President needs to approve it'); },
+  'startup-keep': el => { const s = state.startups.find(x => x.id === el.dataset.id); if (!s?.deletion) return;
+    const mine = s.deletion.by === me().id;
+    if (!canApproveStartupDeletion() && !mine) return toast('Only an admin or the President can decide', '', true);
+    setStartupDeletion(s.id, null); toast(canApproveStartupDeletion() && !mine ? `Kept ${s.name}` : 'Request cancelled', canApproveStartupDeletion() && !mine ? 'deletion request declined' : ''); },
+  'kb-new': () => openKBEditor(null),
+  'kb-edit': el => openKBEditor(el.dataset.id),
+  'kb-delete': el => requestDeletion('kb', el.dataset.id),
+  'kb-tab': el => { if (!draft) return; const ta = $('#kb-body'); if (ta) draft.body = ta.value; draft._preview = el.dataset.v === 'preview'; renderKBEditor(); },
+  md: el => mdInsert(el.dataset.md),
   'sum-meetings': () => { filters.meetings = 'upcoming'; go('meetings'); },
   'sum-events': () => { filters.events = 'mine'; go('events'); },
   'sum-tasks': () => { filters.deadlines = 'pending'; go('deadlines'); },
@@ -353,7 +484,7 @@ document.addEventListener('click', e => {
   if (el.tagName === 'A') e.preventDefault();
   ACT[el.dataset.act]?.(el, e);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.mt-row, .idea-card, tbody tr')) e.target.click(); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.mt-row, .idea-card, tbody tr, .nitem.click')) e.target.click(); });
 
 const CHANGE = {
   role: el => switchRole(el.value),
@@ -372,10 +503,12 @@ const CHANGE = {
   'ct-primary': el => { draft.contacts.forEach(c => c.primary = c.id === el.value); },
   'receipt-file': el => { const f = el.files[0]; if (f) $('#f-receipt').value = f.name; },
   'alloc-sum': () => allocSum(),
+  'kb-image': el => { insertKBImage(el.files[0]); el.value = ''; },
 };
 document.addEventListener('change', e => {
   const el = e.target;
-  if (el.closest('form[data-form="meeting"]')) updateRecipientCount();
+  const mform = el.closest('form[data-form="meeting"]');
+  if (mform) { if (el.name === 'team' || el.name === 'att') syncMeetingTeams(mform, el); updateRecipientCount(); }
   if (el.name === 'overall') allocSum();
   if (el.dataset.change) return CHANGE[el.dataset.change]?.(el);
   syncDraft(el);
@@ -385,6 +518,7 @@ function syncDraft(el) {
   if (el.dataset.d) draft[el.dataset.d] = el.value;
   if (el.dataset.rq) { const t = draft.tasks.find(x => x.id === el.dataset.rq); if (t) t[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; }
   if (el.dataset.ct) { const c = draft.contacts.find(x => x.id === el.dataset.ct); if (c) c[el.dataset.f] = el.value; }
+  if (el.dataset.kbrole) { const r = el.dataset.kbrole; draft.roles = el.checked ? [...new Set([...draft.roles, r])] : draft.roles.filter(x => x !== r); }
   if (el.dataset.att) { const a = el.dataset.att; draft.attendance = el.checked ? [...new Set([...draft.attendance, a])] : draft.attendance.filter(x => x !== a); }
 }
 document.addEventListener('input', e => {
@@ -467,6 +601,21 @@ const FORMS = {
   },
   member(f, fd) { if (!oversight()) return closeDialog(); member(f.dataset.id).responsibility = fd.get('responsibility').trim(); finish('Responsibility updated'); },
   login(f, fd) { if (LIVE) sendLoginLink(String(fd.get('email') || '')); },
+  kb() {
+    if (!isAdmin()) return closeDialog();
+    const ta = $('#kb-body'); if (typeof ta?.value === 'string') draft.body = ta.value;
+    const v = draft, err = $('#kberr');
+    if (!v.title.trim()) { err.textContent = 'Give the article a title.'; return; }
+    if (!v.body.trim()) { err.textContent = 'The article is empty.'; return; }
+    const rec = {id:v.id, title:v.title.trim(), category:v.category.trim() || 'General', roles:v.roles, summary:v.summary.trim(), body:v.body, updatedBy:me().id, updatedAt:new Date().toISOString()};
+    upsert(state.kb, rec); finish(v._new ? 'Article published' : 'Article saved'); openKB(rec.id);
+  },
+  settings(f, fd) {
+    if (!isAdmin()) return;
+    const url = String(fd.get('designDriveUrl') || '').trim();
+    if (url && !/^https:\/\/\S+$/i.test(url)) return toast('Paste the full https:// link to the Drive folder', '', true);
+    state.settings.designDriveUrl = url; save(); render(); toast(url ? 'Design Drive link saved' : 'Design Drive link removed');
+  },
   'admin-invite'(f, fd) {
     if (!isAdmin()) return closeDialog();
     const p = {name:String(fd.get('name')).trim(), email:String(fd.get('email')).trim(), role:fd.get('role'), team:fd.get('team'), is_admin:!!fd.get('is_admin')};
@@ -494,6 +643,7 @@ $('#confirm').addEventListener('close', () => { pendingDeletion = null; });
 (mq.addEventListener ? mq.addEventListener('change', render) : mq.addListener(render));
 if (LIVE) liveBoot();
 else {
+  initDemoState();
   try { localStorage.setItem(KEY + '-probe', '1'); localStorage.removeItem(KEY + '-probe'); } catch (e) { storageOk = false; }
   save();
   render();

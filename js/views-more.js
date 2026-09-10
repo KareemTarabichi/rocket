@@ -2,13 +2,13 @@
 /* ================= startup directory ================= */
 const ratingCell = r => r == null ? '<span class="faint">—</span>' : `<span class="rating ${r >= 8 ? 'hi' : r < 6 ? 'lo' : ''}"><span class="num">${r}</span><span class="bar"><i style="width:${r * 10}%"></i></span></span>`;
 const attTags = s => s.attendance.length ? s.attendance.map(a => `<span class="tag rise">${esc(a)}</span>`).join(' ') : '<span class="faint">Never</span>';
-const contactFlag = s => missingContact(s) ? '<span class="due soon">Missing details</span>' : '<span class="due done">Complete</span>';
+const contactFlag = s => s.deletion ? '<span class="due over">Deletion pending</span>' : missingContact(s) ? '<span class="due soon">Missing details</span>' : '<span class="due done">Complete</span>';
 function startupResults() {
   const list = filteredStartups(), f = filters.startups;
   if (!list.length) return '<div class="panel empty">No startups match. Clear the filters or search for something else.</div>';
   if (isM()) return `<ul class="s-list">${list.map(s => { const p = primaryContact(s); return `
     <li class="s-item" data-act="open-startup" data-id="${s.id}"><div class="n"><span>${esc(s.name)}</span>${s.attendance.map(a => `<span class="tag rise">${esc(a)}</span>`).join('')}</div><div>${ratingCell(s.rating)}</div>
-      <div class="sub"><span>${esc(s.sector || '—')}</span><span class="faint">·</span><span>${p?.name ? esc(p.name) : '<span class="faint">No contact</span>'}</span>${missingContact(s) ? '<span class="review" style="margin-left:auto">Missing details</span>' : ''}</div></li>`; }).join('')}</ul>`;
+      <div class="sub"><span>${esc(s.sector || '—')}</span><span class="faint">·</span><span>${p?.name ? esc(p.name) : '<span class="faint">No contact</span>'}</span>${s.deletion ? '<span class="review" style="margin-left:auto;color:var(--ember)">Deletion pending</span>' : missingContact(s) ? '<span class="review" style="margin-left:auto">Missing details</span>' : ''}</div></li>`; }).join('')}</ul>`;
   if (f.view === 'cards') return `<div class="cards">${list.map(s => { const p = primaryContact(s); return `
     <button class="card" data-act="open-startup" data-id="${s.id}"><div style="display:flex;justify-content:space-between;gap:8px"><h3>${esc(s.name)}</h3>${ratingCell(s.rating)}</div>
       <span class="tag" style="align-self:flex-start">${esc(s.sector || '—')}</span>
@@ -75,7 +75,7 @@ function vDesign() {
   const list = state.designs.filter(d => filters.design === 'all' || d.status !== 'completed').sort((a, b) => a.due.localeCompare(b.due));
   const rel = d => esc(d.event ? eventById(d.event)?.name || 'Event' : d.campaign || 'Campaign');
   return `<div class="page">
-    ${heading('Design', 'Creative requests for events and campaigns. Assigned members see their work in Events and Deadlines too.', `<button class="btn btn-primary" data-act="new-design">${ic('plus')}New request</button>`)}
+    ${heading('Design', 'Creative requests for events and campaigns. Assigned members see their work in Events and Deadlines too.', `${driveBtn()}<button class="btn btn-primary" data-act="new-design">${ic('plus')}New request</button>`)}
     <div class="toolbar">${seg('design-f', filters.design, [['open','Open'], ['all','All requests']])}</div>
     ${list.length ? (isM() ? `<ul class="m-rows">${list.map(d => `<li data-act="open-design" data-id="${d.id}"><div class="top"><b>${esc(d.title)}</b>${designBadge(d.status)}</div><div class="sub"><span>${rel(d)}</span><span class="faint">·</span>${avatar(d.owner)}<span style="margin-left:auto">${dueChip(d.due, d.status === 'completed')}</span></div></li>`).join('')}</ul>`
       : `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Event / campaign</th><th>Deliverables</th><th>Assigned</th><th>Due</th><th>Status</th></tr></thead><tbody>${list.map(d => `<tr data-act="open-design" data-id="${d.id}"><td class="name">${esc(d.title)}</td><td>${rel(d)}</td><td class="muted" style="font-size:13px">${esc(d.deliverables)}</td><td style="white-space:nowrap">${who(d.owner)}</td><td>${dueChip(d.due, d.status === 'completed')}</td><td>${designBadge(d.status)}</td></tr>`).join('')}</tbody></table></div>`)
@@ -110,19 +110,20 @@ const KB = [
   {id:'k10', title:'Technical setup: forms, livestream and tools', category:'Technical setup', roles:['tech'], summary:'The club’s technical checklist.', steps:['Test sign-up forms a week before each event.','Run a livestream rehearsal on the actual network.','Keep credentials in the club password manager, never in chats.']},
   {id:'k12', title:'Admin: managing members and logins', category:'Admin', roles:[], summary:'For whoever holds admin rights — usually someone on Tech.', steps:['Invite members from Admin with their @aus.edu email, club role and team. They get a one-tap sign-in link.','Change someone’s role or team from Admin; their sections and permissions update the next time the page loads.','Disable a login to lock someone out but keep their history. Remove a member only when their records should become unassigned.','There are no passwords. If someone can’t get in, send them a new sign-in link.','Keep at least two admins so the club never gets locked out.']},
   {id:'k11', title:'Moving an idea through the pipeline', category:'Innovation', roles:['innovation'], summary:'Submitted → Under Review → Approved → In Progress → Completed.', steps:['Give every idea an owner, a team and one clear next step.','The next step appears in Deadlines for the owner and collaborators.','Completing that step marks the idea Completed; reopening restores its earlier stage.']}];
+// `KB` above is only the starting content for a new demo. The live list is state.kb, which admins edit.
 function kbOrdered() {
   const q = filters.kb.trim().toLowerCase();
   const rank = a => a.roles.includes(state.role) ? 0 : a.category === 'Onboarding' ? 1 : 2;
-  return KB.filter(a => !q || [a.title, a.summary, a.category, ...a.steps].join(' ').toLowerCase().includes(q)).sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
+  return state.kb.filter(a => !q || [a.title, a.summary, a.category, a.body].join(' ').toLowerCase().includes(q)).sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
 }
 function kbResults() {
   const list = kbOrdered();
-  return list.length ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(${isM() ? '100%' : '280px'},1fr))">${list.map(a => `<button class="kb-card" data-act="open-kb" data-id="${a.id}"><div class="chiprow"><span class="tag">${esc(a.category)}</span>${a.roles.includes(state.role) ? '<span class="tag for-you">For your role</span>' : ''}</div><h3>${esc(a.title)}</h3><p>${esc(a.summary)}</p></button>`).join('')}</div>` : '<div class="panel empty">No articles match that search.</div>';
+  return list.length ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(${isM() ? '100%' : '280px'},1fr))">${list.map(a => `<button class="kb-card" data-act="open-kb" data-id="${a.id}"><div class="chiprow"><span class="tag">${esc(a.category)}</span>${a.roles.includes(state.role) ? '<span class="tag for-you">For your role</span>' : ''}</div><h3>${esc(a.title)}</h3><p>${esc(a.summary)}</p>${a.updatedAt ? `<span class="kb-meta">Updated ${fmtDate(a.updatedAt.slice(0, 10), {day:'numeric', month:'short', year:'numeric'})}</span>` : ''}</button>`).join('')}</div>` : `<div class="panel empty">${state.kb.length ? 'No articles match that search.' : 'No articles yet.'}</div>`;
 }
 function vKB() {
   return `<div class="page">
-    ${heading('Knowledge Base', 'Guides for every role. Articles for your role come first, then onboarding.')}
-    <div class="readonly-note">${ic('info')}<span>Illustrative club guidance — not official university policy.</span></div>
+    ${heading('Knowledge Base', isAdmin() ? 'Club SOPs and guides. As an admin you can add, edit and delete articles — with formatting, links and images.' : 'Guides for every role. Articles for your role come first, then onboarding.', isAdmin() ? `<button class="btn btn-primary" data-act="kb-new">${ic('plus')}New article</button>` : '')}
+    <div class="readonly-note">${ic('info')}<span>Club guidance written by Launchpad — not official university policy.</span></div>
     <label class="search" style="max-width:420px">${ic('search')}<input class="input" type="search" placeholder="Search guides…" value="${esc(filters.kb)}" data-input="kb-q" aria-label="Search guides" style="width:100%"></label>
     <div id="kb-results">${kbResults()}</div>
   </div>`;

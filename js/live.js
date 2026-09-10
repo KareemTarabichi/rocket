@@ -21,7 +21,10 @@ const COLLECTIONS = [
   {key:'tasks', table:'tasks', mode:'upsert-no-delete', get:() => state.tasks, to:t => ({id:t.id, title:t.title, owner:t.owner || null, due:t.due, done:!!t.done, related:t.related || ''})},
   {key:'ideas', table:'ideas', get:() => state.ideas, to:i => ({id:i.id, title:i.title, description:i.description || '', team:i.team, owner:i.owner || null, assigned:i.assigned, stage:i.stage, notes:i.notes || '', next_step:i.next || '', due:i.due || null, previous_stage:i.previousStage || null})},
   {key:'designs', table:'designs', mode:'upsert-no-delete', get:() => state.designs, to:d => ({id:d.id, title:d.title, event_id:d.event || null, campaign:d.campaign || '', brief:d.brief, deliverables:d.deliverables || '', owner:d.owner || null, due:d.due, status:d.status, previous_status:d.previousStatus || null})},
-  {key:'startups', table:'startups', mode:'upsert-no-delete', get:() => state.startups, to:s => ({id:s.id, name:s.name, sector:s.sector || '', notes:s.notes || '', attendance:s.attendance, contacts:s.contacts, rating:s.rating ?? null})},
+  {key:'startups', table:'startups', get:() => state.startups, to:s => ({id:s.id, name:s.name, sector:s.sector || '', notes:s.notes || '', attendance:s.attendance, contacts:s.contacts, rating:s.rating ?? null,
+    deletion_requested_by:s.deletion?.by || null, deletion_requested_at:s.deletion?.at || null, deletion_reason:s.deletion?.reason || ''})},
+  {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || ''})},
+  {key:'kb', table:'kb_articles', get:() => state.kb, to:a => ({id:a.id, title:a.title, category:a.category, roles:a.roles, summary:a.summary || '', body:a.body, updated_by:a.updatedBy || null, updated_at:a.updatedAt})},
   {key:'expenses', table:'expenses', mode:'upsert-no-delete', get:() => state.budget.expenses, to:e => ({id:e.id, name:e.name, event_id:e.event || null, planned:+e.planned || 0, actual:+e.actual || 0, receipt:e.receipt || ''})},
   {key:'reimbursements', table:'reimbursements', mode:'upsert-no-delete', get:() => state.budget.reimbursements, to:r => ({id:r.id, name:r.name, member:r.member || null, event_id:r.event || null, amount:+r.amount || 0, status:r.status, receipt:r.receipt || ''})},
 ];
@@ -36,9 +39,10 @@ async function buildState(userId) {
   const res = await Promise.all([
     q('profiles').order('name'), q('meetings'), sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100),
     q('calendar_settings').eq('id', 1).maybeSingle(), q('events').order('date'), q('event_requirements').order('position'), q('tasks'), q('ideas').order('created_at'),
-    q('designs'), q('startups').order('name'), q('budget_settings').eq('id', 1).maybeSingle(), q('expenses'), q('reimbursements')]);
+    q('designs'), q('startups').order('name'), q('budget_settings').eq('id', 1).maybeSingle(), q('expenses'), q('reimbursements'),
+    q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle()]);
   const bad = res.find(r => r.error); if (bad) throw bad.error;
-  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb] = res.map(r => r.data);
+  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st] = res.map(r => r.data);
   const members = p.map(x => ({id:x.id, name:x.name, role:x.role, team:x.team, email:x.email, responsibility:x.responsibility, is_admin:x.is_admin, active:x.active}));
   const mine = members.find(x => x.id === userId);
   if (!mine || !mine.active) return null;
@@ -52,7 +56,10 @@ async function buildState(userId) {
     tasks:t.map(x => ({id:x.id, title:x.title, owner:x.owner, due:x.due, done:x.done, related:x.related})),
     ideas:i.map(x => ({id:x.id, title:x.title, description:x.description, team:x.team, owner:x.owner, assigned:x.assigned || [], stage:x.stage, notes:x.notes, next:x.next_step, due:x.due || '', ...(x.previous_stage ? {previousStage:x.previous_stage} : {})})),
     designs:d.map(x => ({id:x.id, title:x.title, event:x.event_id || '', campaign:x.campaign, brief:x.brief, deliverables:x.deliverables, owner:x.owner, due:x.due, status:x.status, ...(x.previous_status ? {previousStatus:x.previous_status} : {})})),
-    startups:s.map(x => ({id:x.id, name:x.name, sector:x.sector, notes:x.notes, attendance:x.attendance || [], contacts:x.contacts || [], rating:x.rating == null ? null : +x.rating})),
+    startups:s.map(x => ({id:x.id, name:x.name, sector:x.sector, notes:x.notes, attendance:x.attendance || [], contacts:x.contacts || [], rating:x.rating == null ? null : +x.rating,
+      deletion:x.deletion_requested_at ? {by:x.deletion_requested_by, at:x.deletion_requested_at, reason:x.deletion_reason || ''} : null})),
+    kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
+    settings:{designDriveUrl:st?.design_drive_url || ''},
     budget:{overall:+(bs?.overall || 0), allocations:bs?.allocations || {},
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),
       reimbursements:rb.map(x => ({id:x.id, name:x.name, member:x.member, event:x.event_id || '', amount:+x.amount, status:x.status, receipt:x.receipt}))},
@@ -143,6 +150,14 @@ async function enterApp(session) {
 }
 async function signOut() { await sb.auth.signOut(); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }
 
+// Knowledge-base images go to the public "kb-images" storage bucket; only admins can upload.
+async function uploadKbImage(file) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
+  const {error} = await sb.storage.from('kb-images').upload(path, file, {contentType:file.type, upsert:false});
+  if (error) throw error;
+  return sb.storage.from('kb-images').getPublicUrl(path).data.publicUrl;
+}
 async function adminApi(action, payload = {}) {
   const {data, error} = await sb.functions.invoke('admin-users', {body:{action, ...payload, redirectTo:location.origin + location.pathname}});
   if (error) { let msg = error.message; try { msg = (await error.context.json()).error || msg; } catch (e) {} throw new Error(msg); }

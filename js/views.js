@@ -3,7 +3,14 @@
 const avatar = (id, lg) => { const m = member(id); if (!m) return `<span class="av ${lg ? 'av-lg' : ''}" style="background:var(--border);color:var(--text-muted)">–</span>`;
   const hue = HUES[[...m.id].reduce((s, c) => s + c.charCodeAt(0), 0) % HUES.length]; return `<span class="av ${lg ? 'av-lg' : ''}" style="background:${hue}" title="${esc(m.name)}">${m.name.split(' ').map(w => w[0]).slice(0, 2).join('')}</span>`; };
 const who = id => { const m = member(id); return m ? `<span class="who">${avatar(id)}<span>${esc(m.name)}</span></span>` : '<span class="faint">Unassigned</span>'; };
-const heading = (title, sub, actions = '') => `<div class="page-head"><div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${actions ? `<div class="toolbar">${actions}</div>` : ''}</div>`;
+const bellBtn = (cls = '') => { const n = unreadCount();
+  return `<button type="button" class="btn bell ${cls}" data-act="notif" aria-label="Notifications${n ? `, ${n} need attention` : ''}" title="Notifications">${ic('bell')}${n ? `<span class="bell-badge">${n > 99 ? '99+' : n}</span>` : ''}</button>`; };
+// Design Drive: the club's Google Drive folder with guidelines and assets. Admins set the link in Admin → Links.
+const canSeeDrive = () => access('design') || ['design', 'media', 'pr'].includes(state.role);
+const driveBtn = (cls = '') => state.settings?.designDriveUrl
+  ? `<a class="btn ${cls}" href="${esc(state.settings.designDriveUrl)}" target="_blank" rel="noopener noreferrer">${ic('folder')}Design Drive${ic('ext')}</a>`
+  : `<button type="button" class="btn ${cls}" data-act="drive-missing">${ic('folder')}Design Drive</button>`;
+const heading = (title, sub, actions = '') => `<div class="page-head"><div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="toolbar">${bellBtn('page-bell')}${actions}</div></div>`;
 const badge = (cls, label) => `<span class="pill ${cls}">${esc(label)}</span>`;
 const ideaBadge = s => badge('st-' + s, IDEA_LABEL[s]);
 const designBadge = s => badge('ds-' + s, DESIGN_LABEL[s]);
@@ -35,7 +42,7 @@ function renderShell() {
       <div class="whoami role-sw"><label for="role-d">Demo role switcher</label>${roleSelect('role-d')}<span class="faint" style="font-size:11.5px">No sign-in in this demo. Pick a role to see its view. Tech is also the platform admin.</span></div>
       <div style="display:flex;gap:14px;padding:0 4px"><button class="linkbtn" data-act="reset">Reset demo data</button></div>`}
     </div>`;
-  $('#topbar').innerHTML = `${BRAND}<button class="me-btn" data-act="more" aria-label="Switch role and more sections">${avatar(me().id)}${esc(roleLabel(state.role))}</button>`;
+  $('#topbar').innerHTML = `${BRAND}${bellBtn()}<button class="me-btn" data-act="more" aria-label="Switch role and more sections">${avatar(me().id)}${esc(roleLabel(state.role))}</button>`;
   $('#tabbar').innerHTML = TABS.map(k => { const [, l, i] = SECTIONS.find(s => s[0] === k);
     return `<a href="#" data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ''}>${ic(i)}${k === 'overview' ? 'Home' : l}${k === 'deadlines' && overdue ? `<span class="badge">${overdue}</span>` : ''}</a>`; }).join('')
     + `<button data-act="more" ${TABS.includes(view) ? '' : 'aria-current="page"'}>${ic('more')}More</button>`;
@@ -65,7 +72,7 @@ function vOverview() {
     <section class="hero" style="min-height:0">
       <div class="thermal"></div><div class="grain"></div>
       <div><div class="hero-date">${dow}.${pad(now.getDate())}.${mon}</div><h1>Hi ${esc(m.name.split(' ')[0])} — here’s your ${esc(roleLabel(m.role))} view.</h1></div>
-      <div class="hero-summary">${overdue ? `<span class="hero-chip over"><b>${overdue}</b> overdue</span>` : ''}${um[0] ? `<span class="hero-chip">Next meeting: ${esc(um[0].title)} <b>${fmtDate(um[0].date, {day:'numeric', month:'short'})} ${fmtTime(um[0].start)}</b></span>` : ''}</div>
+      <div class="hero-summary">${overdue ? `<span class="hero-chip over"><b>${overdue}</b> overdue</span>` : ''}${um[0] ? `<span class="hero-chip">Next meeting: ${esc(um[0].title)} <b>${fmtDate(um[0].date, {day:'numeric', month:'short'})} ${fmtTime(um[0].start)}</b></span>` : ''}${bellBtn('page-bell')}</div>
     </section>
     <div class="sum-cards">
       ${card('sum-meetings', um.length, 'Upcoming meetings', oversight() ? 'All club meetings' : 'Meetings you’re invited to')}
@@ -89,7 +96,7 @@ function vOverview() {
           <ul class="rows">${ideas.slice(0, 4).map(i => `<li class="row" data-act="open-idea" data-id="${i.id}"><div class="row-main"><div class="row-title">${esc(i.title)}</div><div class="row-sub">${esc(i.next || 'No next step yet')}</div></div>${ideaBadge(i.stage)}</li>`).join('') || '<li class="empty">No active ideas involve you.</li>'}</ul></section>
         <section class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="quick">
           ${ea() ? `<button class="btn btn-primary" data-act="new-meeting">${ic('cal')}Schedule meeting</button>` : ''}
-          <button class="btn" data-act="new-idea">${ic('bulb')}Submit idea</button><button class="btn" data-act="new-task">${ic('flag')}Add follow-up</button><button class="btn" data-act="go" data-v="kb">${ic('book')}${esc(roleLabel(state.role))} guidance</button></div></section>
+          <button class="btn" data-act="new-idea">${ic('bulb')}Submit idea</button><button class="btn" data-act="new-task">${ic('flag')}Add follow-up</button><button class="btn" data-act="go" data-v="kb">${ic('book')}${esc(roleLabel(state.role))} guidance</button>${canSeeDrive() ? driveBtn() : ''}</div></section>
       </div>
     </div>
   </div>`;
@@ -137,7 +144,7 @@ function vEvents() {
   return `<div class="page">
     ${heading('Events', 'Club events with their checklist. Everyone can create an event; the responsible team, its creator and leadership manage it.', `<button class="btn btn-primary" data-act="new-event">${ic('plus')}New event</button>`)}
     <div class="toolbar">${seg('ev-f', filters.events, [['mine','My upcoming'], ['all','All events']])}</div>
-    ${myDesign.length ? `<section class="panel"><div class="panel-head"><h2>Your design work</h2><span class="faint" style="font-size:12.5px">Open to read the brief and update status</span></div><ul class="rows">${myDesign.map(d => `<li class="row" data-act="open-design" data-id="${d.id}"><div class="row-main"><div class="row-title">${esc(d.title)}</div><div class="row-sub">${esc(d.event ? eventById(d.event)?.name : d.campaign)} · ${esc(d.deliverables)}</div></div>${designBadge(d.status)}${dueChip(d.due)}</li>`).join('')}</ul></section>` : ''}
+    ${myDesign.length ? `<section class="panel"><div class="panel-head"><h2>Your design work</h2>${driveBtn('sm')}</div><ul class="rows">${myDesign.map(d => `<li class="row" data-act="open-design" data-id="${d.id}"><div class="row-main"><div class="row-title">${esc(d.title)}</div><div class="row-sub">${esc(d.event ? eventById(d.event)?.name : d.campaign)} · ${esc(d.deliverables)}</div></div>${designBadge(d.status)}${dueChip(d.due)}</li>`).join('')}</ul></section>` : ''}
     ${list.length ? `<div class="ev-grid">${list.map(e => { const why = relevantEvent(e), past = daysFrom(e.date) < 0;
       return `<button class="ev-card" data-act="open-event" data-id="${e.id}" style="${past ? 'opacity:.6' : ''}">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><h3>${esc(e.name)}</h3><span class="num faint" style="font-size:12px;white-space:nowrap">${past ? 'Past' : 'in ' + daysFrom(e.date) + 'd'}</span></div>

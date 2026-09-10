@@ -39,7 +39,8 @@ You need free accounts on **Supabase** and **Vercel** (and optionally GitHub). R
 
 1. In Supabase, create a new project. Pick the region closest to the UAE that's offered, and save the database password somewhere safe.
 2. Open **SQL Editor → New query**, paste the whole of `supabase/migrations/20260910000000_init.sql`, and run it.
-3. New query again: paste `supabase/import_startups.sql` and run it. The Startup Directory now has your 56 startups.
+3. New query: paste `supabase/migrations/20260911000000_kb_settings_startup_approval.sql` and run it. This adds the editable knowledge base (with 12 starter articles), the Design Drive setting, image uploads for articles, and approval-gated startup deletion.
+4. New query: paste `supabase/import_startups.sql` and run it. The Startup Directory now has your 56 startups.
 
 ### 2. Lock down sign-in
 
@@ -108,14 +109,22 @@ Everyone else is invited from Rocket's **Admin** section. Make a second admin ea
 - **Resend** a sign-in link. There are no passwords to reset.
 - **Remove** a member (with confirmation). Their account is deleted; anything they owned becomes unassigned.
 - See every admin action in the **Admin activity** log.
+- **Write the knowledge base**: add, edit and delete articles with headings, lists, links and images (Knowledge Base → New article).
+- **Set the Design Drive link** (Admin → Links). PR, Media, Graphic Design and leadership get a Design Drive button.
+- **Approve startup deletions**. Anyone with the directory can ask to delete a startup; only an admin or the President can approve (it then disappears for everyone) or keep it.
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.
+
+## Notifications
+
+The bell (top right of every page, or the top bar on phones) lists what needs *you*: your deadlines that are overdue or due within a day, meetings today or tomorrow, new design work, reviews waiting for PR, ideas to review (leadership), reimbursements to approve (budget roles) and startup deletions to decide (admins and the President). Meeting invitations, changes and cancellations addressed to you appear underneath. The unread marker is kept per browser.
 
 ## Still simulated in live mode
 
 - Meeting invitations, updates and cancellations are recorded in the notification log but **not emailed**.
 - The Google Calendar connection is a switch only — no OAuth, no calendar entries.
 - Receipts store the filename only.
+- Knowledge-base images are stored in a public bucket: anyone with an image's link can open it. Don't upload anything confidential.
 - Other people's changes appear when you reload or come back to the tab (no live push yet).
 
 ## Security notes

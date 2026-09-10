@@ -48,6 +48,12 @@ function vAdmin() {
       return `<tr data-act="admin-edit" data-id="${m.id}"><td><div class="who">${avatar(m.id)}<span><span class="name">${esc(m.name)}</span>${m.id === me().id ? ' <span class="faint">(you)</span>' : ''}</span></div><div class="mono faint" style="font-size:12px;margin-top:2px">${esc(m.email)}</div></td>
         <td style="white-space:nowrap">${esc(roleLabel(m.role))}</td><td>${esc(teamName(m.team))}</td><td>${m.is_admin ? '<span class="tag for-you">Admin</span>' : '<span class="faint">Member</span>'}</td>
         <td><span class="pill ${c}">${esc(l)}</span></td><td class="num muted" style="font-size:12.5px;white-space:nowrap">${lastSeen(m)}</td></tr>`; }).join('')}</tbody></table></div>`}
+    <section class="panel"><div class="panel-head"><h2>Links</h2><span class="faint" style="font-size:12.5px">Shown to PR, Media, Graphic Design and leadership</span></div>
+      <form data-form="settings" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px" novalidate>
+        <label for="f-drive" style="font-size:12.5px;color:var(--text-muted);font-weight:500">Design Drive — the Google Drive folder with guidelines and assets</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" id="f-drive" name="designDriveUrl" type="url" value="${esc(state.settings?.designDriveUrl || '')}" placeholder="https://drive.google.com/drive/folders/…" style="flex:1;min-width:220px"><button class="btn">Save link</button></div>
+        <span class="muted-note">Make sure the folder is shared with the club’s AUS accounts in Google Drive — Rocket only stores the link.</span>
+      </form></section>
     <section class="panel"><div class="panel-head"><h2>Admin activity</h2><span class="faint" style="font-size:12.5px">Latest ${Math.min(adminData.log.length, 50)}</span></div>
       <div>${adminData.log.slice(0, 50).map(l => `<div class="notif ${l.action === 'remove' || l.action === 'disable' ? 'cancel' : ''}"><span class="k">${esc(actor(l.actor))} · ${esc(ADMIN_ACTION[l.action] || l.action)} ${esc(l.target_email)}</span><time>${fmtStamp(l.created_at)}</time>${l.details ? `<span class="d">${esc(l.details)}</span>` : ''}</div>`).join('') || '<div class="empty">No admin actions yet.</div>'}</div></section>
   </div>`;

@@ -44,7 +44,10 @@ const ICON = {
   bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   shield:'<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
-  logout:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>'
+  logout:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>',
+  folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 const mq = window.matchMedia('(max-width: 760px)');
@@ -167,22 +170,30 @@ function seed() {
     const extra = F.length <= 1 ? [...r.emails.slice(1), ...r.phones.slice(1)] : [];
     return {id:'s' + (i + 1), name:r.name, sector:r.sector, contacts, rating:r.rating,
       notes:[r.desc, extra.length ? `Other contact details: ${extra.join(', ')}` : ''].filter(Boolean).join('\n\n'),
-      attendance: r.attendance ? ['Rise'] : []};
+      attendance: r.attendance ? ['Rise'] : [], deletion:null};
   });
+  // example of the approval flow: the Startup Coordinator has asked to delete one record
+  const pendingDel = startups.find(s => s.name === 'Paci.ai');
+  if (pendingDel) pendingDel.deletion = {by:'m6', at:new Date(Date.now() - 5 * 36e5).toISOString(), reason:'Example request — no contact details and no activity since RISE25.'};
+
+  // knowledge base starts from the built-in guides; admins edit it from there
+  const kb = KB.map(a => ({id:a.id, title:a.title, category:a.category, roles:a.roles, summary:a.summary,
+    body:a.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'), updatedBy:'m8', updatedAt:new Date(Date.now() - 864e5 * 12).toISOString()}));
 
   const notifications = [
     {id:uid('n'), kind:'invite', title:'Meeting invitation: Leadership weekly sync', details:`${fmtDate(T)} · 6:00 PM–7:00 PM · Launchpad room`, recipients:['m1','m2','m3','m4'], at:new Date(Date.now() - 864e5 * 2).toISOString(), calendar:false},
     {id:uid('n'), kind:'invite', title:'Meeting invitation: All-members monthly', details:`${fmtDate(D(6))} · 5:30 PM–6:30 PM · Main Plaza auditorium`, recipients:members.map(m => m.id), at:new Date(Date.now() - 864e5).toISOString(), calendar:false}];
 
-  return {version:2, role:'ea', meId:'m4', members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, calendar:{connected:false, email:''}};
+  return {version:2, role:'ea', meId:'m4', members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, kb,
+    settings:{designDriveUrl:''}, calendar:{connected:false, email:''}};
 }
 
 /* ================= state & persistence ================= */
 const KEY = 'launchpad-demo-v2';
 let storageOk = true;
 let state = null;   // live mode: filled from Supabase after sign-in
-if (!LIVE) {
-  try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog) state = s; } } catch (e) { storageOk = false; }
+function initDemoState() {
+  try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
 }
 let view = 'overview';
@@ -214,10 +225,14 @@ const canIdea = idea => !!idea && (oversight() || idea.owner === me().id || idea
 const canEvent = ev => !!ev && (oversight() || ev.createdBy === me().id || teamMembers(ev.team).includes(me().id));
 const canTask = item => !!item && (oversight() || item.owners.includes(me().id));
 const canDesignStatus = d => access('design') || d.owner === me().id;
+// Deleting a startup needs an admin or the President; anyone with the directory can ask for it.
+const canApproveStartupDeletion = () => isAdmin() || state.role === 'president';
 function deletable(kind, rec) {
   if (!rec) return false;
   if (kind === 'meeting') return ea();
   if (kind === 'idea') return canIdea(rec);
+  if (kind === 'startup') return canApproveStartupDeletion();
+  if (kind === 'kb') return isAdmin();
   if (kind === 'member') { const list = adminData.members || state.members;
     return isAdmin() && rec.id !== me().id && !(rec.is_admin && rec.active !== false && list.filter(m => m.is_admin && m.active !== false).length <= 1); }
   return false;
@@ -308,4 +323,69 @@ function budgetTotals(eventId) {
   const allocation = eventId ? (+state.budget.allocations[eventId] || 0) : +state.budget.overall || 0;
   const allocated = Object.values(state.budget.allocations).reduce((s, v) => s + (+v || 0), 0);
   return {planned, actual, allocation, remaining:allocation - actual, over:actual > allocation, allocated};
+}
+
+/* ================= notification centre ================= */
+// Things that need the signed-in member's attention, newest-urgent first. Computed, never stored.
+function attentionItems() {
+  const m = me(), items = [];
+  deadlineItems(true).filter(x => !x.done && x.owners.includes(m.id) && daysFrom(x.due) <= 1).forEach(x => {
+    const n = daysFrom(x.due);
+    items.push({kind:'deadline', tone:n < 0 ? 'over' : 'soon', label:x.srcLabel, title:x.title,
+      sub:`${x.related} · ${n < 0 ? relDue(x.due) : n === 0 ? 'due today' : 'due tomorrow'}`, key:x.key,
+      act:x.src === 'req' ? 'open-event' : x.src === 'idea' ? 'open-idea' : x.src === 'design' ? 'open-design' : 'go', id:x.src === 'req' ? x.eventId : x.src === 'task' ? 'deadlines' : x.id});
+  });
+  upcomingMeetings().filter(mt => recipients(mt).includes(m.id) && daysFrom(mt.date) <= 1).forEach(mt =>
+    items.push({kind:'meeting', tone:meetingLive(mt) ? 'over' : 'info', label:'Meeting', title:mt.title,
+      sub:`${meetingLive(mt) ? 'Happening now' : daysFrom(mt.date) === 0 ? 'Today' : 'Tomorrow'} · ${fmtTime(mt.start)} · ${mt.location}`, act:'open-meeting', id:mt.id}));
+  state.designs.filter(d => d.owner === m.id && d.status === 'requested').forEach(d =>
+    items.push({kind:'design', tone:'info', label:'Design', title:`New request: ${d.title}`, sub:`Due ${fmtDate(d.due)} · ${d.deliverables}`, act:'open-design', id:d.id}));
+  if (state.role === 'pr') state.designs.filter(d => d.status === 'in_review').forEach(d =>
+    items.push({kind:'design', tone:'soon', label:'Review', title:`${d.title} is ready for review`, sub:`From ${member(d.owner)?.name || 'someone'}`, act:'open-design', id:d.id}));
+  const submitted = state.ideas.filter(i => i.stage === 'submitted').length;
+  if (oversight() && submitted) items.push({kind:'ideas', tone:'info', label:'Ideas', title:`${submitted} new idea${submitted === 1 ? '' : 's'} to review`, sub:'Submitted and waiting for a decision', act:'notif-ideas'});
+  const reimb = access('budget') ? state.budget.reimbursements.filter(r => r.status === 'Requested').length : 0;
+  if (reimb) items.push({kind:'budget', tone:'soon', label:'Budget', title:`${reimb} reimbursement${reimb === 1 ? '' : 's'} to approve`, sub:'Requested and waiting for the Treasurer', act:'notif-budget'});
+  if (canApproveStartupDeletion()) state.startups.filter(s => s.deletion).forEach(s =>
+    items.push({kind:'startup-deletion', tone:'over', label:'Approval', title:`Delete ${s.name}?`, sub:`Requested by ${member(s.deletion.by)?.name || 'a member'} · ${s.deletion.reason || 'no reason given'}`, id:s.id}));
+  return items;
+}
+const updatesForMe = () => state.notifications.filter(n => n.recipients.includes(me().id) && (Date.now() - new Date(n.at)) < 14 * 864e5);
+const seenKey = () => 'rocket-seen-' + me().id;
+function lastSeen() { try { return +localStorage.getItem(seenKey()) || 0; } catch (e) { return 0; } }
+function markSeen() { try { localStorage.setItem(seenKey(), String(Date.now())); } catch (e) {} }
+const unreadCount = () => attentionItems().length + updatesForMe().filter(n => new Date(n.at) > lastSeen()).length;
+
+/* ================= markdown (knowledge base) =================
+   Escapes everything first, then adds a small safe subset: headings, bold, italic, code,
+   lists, quotes, rules, links and images. Only http(s), mailto and relative links are allowed. */
+function safeUrl(u, img) { return /^(https?:\/\/|mailto:|\/|#)/i.test(u) || (img && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(u)); }
+function mdInline(s) {
+  return s
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => safeUrl(url, true) ? `<img src="${url}" alt="${alt}" loading="lazy">` : m)
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, url) => safeUrl(url) ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${t}</a>` : m)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>');
+}
+function mdToHtml(md) {
+  const lines = esc(md || '').replace(/\r/g, '').split('\n'), out = [];
+  let list = null, para = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.map(mdInline).join('<br>')}</p>`); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.map(i => `<li>${mdInline(i)}</li>`).join('')}</${list.tag}>`); list = null; } };
+  for (const raw of lines) {
+    const line = raw.trimEnd(); let m;
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) { flushPara(); flushList(); out.push(`<h${m[1].length + 1}>${mdInline(m[2])}</h${m[1].length + 1}>`); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(line.trim())) { flushPara(); flushList(); out.push('<hr>'); continue; }
+    if ((m = line.match(/^&gt;\s?(.*)$/))) { flushPara(); flushList(); out.push(`<blockquote>${mdInline(m[1])}</blockquote>`); continue; }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/)) || (m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+      const tag = /^\s*\d/.test(line) ? 'ol' : 'ul'; flushPara();
+      if (!list || list.tag !== tag) { flushList(); list = {tag, items:[]}; }
+      list.items.push(m[1]); continue;
+    }
+    flushList(); para.push(line);
+  }
+  flushPara(); flushList();
+  return out.join('');
 }
