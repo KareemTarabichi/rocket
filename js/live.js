@@ -129,8 +129,9 @@ function showLogin(msg = '', email = '') {
       <button class="btn btn-primary" style="justify-content:center">Sign in</button>
       <div class="login-alt">
         <span>First time here, or forgot your password?</span>
-        <button type="button" class="btn" data-act="login-code" style="justify-content:center">Email me a sign-in code</button>
-        <span class="faint" style="font-size:12px">We’ll email you a 6-digit code. Enter it here, then set a password. Only members an admin has invited can sign in.</span>
+        ${CFG.emailCodes ? `<button type="button" class="btn" data-act="login-code" style="justify-content:center">Email me a sign-in code</button>
+        <span class="faint" style="font-size:12px">We’ll email you a 6-digit code. Enter it here, then set a password.</span>`
+        : '<span class="faint" style="font-size:12.5px;line-height:1.5">Ask a Rocket admin for a temporary password. You’ll choose your own as soon as you sign in.</span>'}
       </div>
     </form></div>`;
 }
@@ -143,10 +144,10 @@ async function passwordSignIn(email, password) {
   const out = $('#l-msg');
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@aus\.edu$/.test(email)) { out.innerHTML = '<span class="err">Use your @aus.edu address.</span>'; return; }
-  if (!password) { out.innerHTML = '<span class="err">Enter your password — or tap “Email me a sign-in code” if you haven’t set one yet.</span>'; return; }
+  if (!password) { out.innerHTML = `<span class="err">Enter your password${CFG.emailCodes ? ' — or tap “Email me a sign-in code” if you haven’t set one yet' : ''}.</span>`; return; }
   out.innerHTML = '<span class="faint">Signing in…</span>';
   const {error} = await sb.auth.signInWithPassword({email, password});
-  if (error) out.innerHTML = `<span class="err">${/invalid|credentials/i.test(error.message) ? 'Wrong email or password. If you haven’t set a password yet, tap “Email me a sign-in code”.' : esc(error.message)}</span>`;
+  if (error) out.innerHTML = `<span class="err">${/invalid|credentials/i.test(error.message) ? (CFG.emailCodes ? 'Wrong email or password. If you haven’t set a password yet, tap “Email me a sign-in code”.' : 'Wrong email or password. First time, or forgot it? Ask a Rocket admin for a temporary password.') : esc(error.message)}</span>`;
   // success is picked up by onAuthStateChange → enterApp
 }
 async function sendLoginCode(email) {
@@ -190,7 +191,7 @@ function linkErrorFromUrl() {
   if (!code && !desc) return '';
   history.replaceState(null, '', location.pathname);
   return /expired|invalid|otp/i.test(`${code} ${desc}`)
-    ? '<span class="err">That sign-in link had already been used or expired — AUS email sometimes opens links to scan them. Tap “Email me a sign-in code” below instead.</span>'
+    ? '<span class="err">That sign-in link had already been used or expired — AUS email opens links to scan them. Sign in with your password, or ask a Rocket admin for a temporary one.</span>'
     : `<span class="err">Sign-in didn’t work: ${esc((desc || code).replace(/\+/g, ' '))}</span>`;
 }
 
@@ -200,7 +201,7 @@ function showSetPassword(msg = '') {
   $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
     <form class="login-card" data-form="set-password" novalidate>
       ${BRAND}
-      <div><h1>Set your password</h1><p style="margin-top:6px">You’re signed in as <b>${esc(me().email)}</b>. Choose a password to sign in with from now on — including in the Rocket app on your phone’s home screen.</p></div>
+      <div><h1>Set your password</h1><p style="margin-top:6px">You’re signed in as <b>${esc(me().email)}</b>. Choose your own password — the temporary one stops working. Use it to sign in from now on, including in the Rocket app on your phone’s home screen.</p></div>
       <input type="email" name="username" value="${esc(me().email)}" autocomplete="username" hidden>
       <div class="field"><label for="p-new">New password</label><input class="input" id="p-new" name="password" type="password" autocomplete="new-password" minlength="8" required></div>
       <div class="field"><label for="p-again">Type it again</label><input class="input" id="p-again" name="again" type="password" autocomplete="new-password" minlength="8" required></div>
@@ -217,7 +218,7 @@ async function savePassword(password, again, out) {
   const {error} = await sb.auth.updateUser({password, data:{password_set:true}});
   if (error) { out.innerHTML = `<span class="err">${/different/i.test(error.message) ? 'That’s your current password — pick a new one.'
     : /weak|short|characters/i.test(error.message) ? 'That password is too weak. Try a longer one.'
-    : /reauth|recent/i.test(error.message) ? 'For security, sign out, sign back in with “Email me a sign-in code”, then change your password.'
+    : /reauth|recent/i.test(error.message) ? 'For security, sign out and sign back in, then change your password.'
     : esc(error.message)}</span>`; return false; }
   return true;
 }

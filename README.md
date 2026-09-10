@@ -7,7 +7,7 @@ It's a plain HTML/CSS/JavaScript site — no build step. It runs in two modes:
 | | Demo | Live |
 |---|---|---|
 | When | `config.js` is empty (default) | `config.js` has your Supabase URL and anon key |
-| Sign-in | None; a role switcher at the bottom of the sidebar | Email + password (first time: emailed code), invited `@aus.edu` accounts only |
+| Sign-in | None; a role switcher at the bottom of the sidebar | Email + password (first time: temporary password from an admin), invited `@aus.edu` accounts only |
 | Data | Sample data in this browser (`localStorage`) | Shared Postgres database on Supabase |
 | Permissions | Checked in the browser | Checked in the browser **and** enforced by row-level security in the database |
 | Admin | Simulated (Tech is the admin) | Real invites, role changes, disabled logins and removals |
@@ -103,18 +103,23 @@ Everyone else is invited from Rocket's **Admin** section. Make a second admin ea
 
 ## Signing in
 
-- **First time:** on the login page, enter your email and tap **Email me a sign-in code**, type the 6-digit code, then set a password. (Codes instead of links because AUS email scans links, which uses up one-time sign-in links before you tap them.)
-- **After that:** sign in with email and password — in the browser or in the Rocket app on your home screen. (On iPhone the home-screen app can't receive sign-in links, which is why the password exists.)
-- **Forgot it:** "Email me a sign-in code", then set a new password. Or change it any time from the sidebar or the More menu.
+Rocket doesn't email sign-in links: AUS's Microsoft 365 email opens links to scan them, which uses up one-time links before members tap them.
+
+- **New member:** an admin invites them in **Admin → Invite member**. Rocket creates the account and shows a **temporary password** once, with Copy and "Send on WhatsApp" buttons.
+- **First sign-in:** email + temporary password (browser or home-screen app). Rocket then makes them choose their own password.
+- **Forgot it:** an admin opens them in Admin → **Reset password** and sends the new temporary one.
+- **Change it:** sidebar or More menu → **Change password**.
 
 In Supabase, **Authentication → Sign In / Providers → Email**: set **Minimum password length** to 8, and leave **Secure password change** off.
 
+Later, if you connect your own email sender (Authentication → Emails → SMTP), you can put the code into the Magic Link template (`supabase/email-templates/magic-link.html`) and set `emailCodes: true` in `config.js` to let members get sign-in codes themselves.
+
 ## What the admin can do
 
-- **Invite** a member: name, `@aus.edu` email, club role, team, and optionally admin rights. They get an invitation email, then sign in with an emailed code and set a password.
+- **Invite** a member: name, `@aus.edu` email, club role, team, and optionally admin rights. Rocket shows a temporary password to send them; they choose their own at first sign-in.
 - **Edit** name, club role, team and admin rights. Rocket always keeps at least one admin.
 - **Disable / enable** a login. Disabled members can't sign in and the database refuses all their reads and writes; their records stay.
-- **Send a sign-in code**. New members use it once, then set a password; members who forget their password use it to set a new one.
+- **Reset a password**: gives the member a new temporary password to send them; they choose their own at next sign-in.
 - **Remove** a member (with confirmation). Their account is deleted; anything they owned becomes unassigned.
 - See every admin action in the **Admin activity** log.
 - **Write the knowledge base**: add, edit and delete articles with headings, lists, links and images (Knowledge Base → New article).

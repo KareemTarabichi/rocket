@@ -58,11 +58,11 @@ function vAdmin() {
       <div>${adminData.log.slice(0, 50).map(l => `<div class="notif ${l.action === 'remove' || l.action === 'disable' ? 'cancel' : ''}"><span class="k">${esc(actor(l.actor))} · ${esc(ADMIN_ACTION[l.action] || l.action)} ${esc(l.target_email)}</span><time>${fmtStamp(l.created_at)}</time>${l.details ? `<span class="d">${esc(l.details)}</span>` : ''}</div>`).join('') || '<div class="empty">No admin actions yet.</div>'}</div></section>
   </div>`;
 }
-const ADMIN_ACTION = {invite:'invited', update:'updated', disable:'disabled the login of', enable:'re-enabled the login of', resend:'sent a sign-in code to', remove:'removed'};
+const ADMIN_ACTION = {invite:'invited', update:'updated', disable:'disabled the login of', enable:'re-enabled the login of', resend:'sent a sign-in code to', 'reset-password':'reset the password of', remove:'removed'};
 
 function openAdminInvite() {
   if (!isAdmin()) return;
-  openDialog(`<form data-form="admin-invite" novalidate>${dHead('Invite a member', 'They get an invitation email, then sign in with a code and set a password. Only @aus.edu addresses can join.')}
+  openDialog(`<form data-form="admin-invite" novalidate>${dHead('Invite a member', 'Rocket creates their account with a temporary password for you to send them. They choose their own at first sign-in. Only @aus.edu addresses.')}
     <div class="dlg-body">
       ${field('Full name', inp('name', '', 'required autocomplete="off"'), 'f-name')}
       ${field('AUS email', inp('email', '', 'type="email" required placeholder="g000xxxxx@aus.edu" autocomplete="off"'), 'f-email')}
@@ -86,9 +86,9 @@ function openAdminEdit(id) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${st === 'disabled' ? `<button type="button" class="btn sm" data-act="admin-enable" data-id="${m.id}">Enable login</button>`
             : `<button type="button" class="btn sm" data-act="admin-disable" data-id="${m.id}" ${self || lastAdmin ? `disabled title="${self ? 'You can’t disable your own login' : 'Rocket needs at least one active admin'}"` : ''}>Disable login</button>`}
-          ${st !== 'disabled' ? `<button type="button" class="btn sm" data-act="admin-resend" data-id="${m.id}">Send sign-in code</button>` : ''}
+          ${st !== 'disabled' ? `<button type="button" class="btn sm" data-act="admin-reset" data-id="${m.id}" ${self ? 'disabled title="Use Change password for your own account"' : ''}>Reset password</button>` : ''}
         </div>
-        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. Members sign in the first time with an emailed code, then set their own password. If someone forgets it, send them a sign-in code and they’ll be asked to set a new one.</span></div>
+        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. New members sign in with the temporary password you send them, then choose their own. If someone forgets theirs, reset it and send them the new temporary one.</span></div>
       <span class="err" id="aerr" role="alert"></span>
     </div>
     ${foot('<button class="btn btn-primary">Save changes</button>', `<button type="button" class="btn btn-del" data-act="admin-remove" data-id="${m.id}" ${self || lastAdmin ? 'disabled' : ''}>${ic('trash')}Remove member</button>`)}</form>`, 'narrow');
@@ -105,8 +105,11 @@ function demoAdmin(action, p) {
       if (!p.name.trim()) throw new Error('Add the member’s name.');
       if (list.some(m => m.email.toLowerCase() === email)) throw new Error('Someone with that email is already on Rocket.');
       list.push({id:uid('m'), name:p.name.trim(), email, role:p.role, team:p.team, responsibility:'', is_admin:!!p.is_admin, active:true, last_sign_in_at:null, invited_at:new Date().toISOString()});
-      logIt('invite', email, `${p.role} · ${p.team}${p.is_admin ? ' · admin' : ''}`); break;
+      logIt('invite', email, `${p.role} · ${p.team}${p.is_admin ? ' · admin' : ''}`); save(); return {ok:true, tempPassword:demoTempPassword()};
     }
+    case 'reset-password':
+      if (t.id === me().id) throw new Error('Use “Change password” for your own account.');
+      logIt('reset-password', t.email); save(); return {ok:true, tempPassword:demoTempPassword()};
     case 'update': {
       if (t.is_admin && !p.is_admin && t.active !== false && activeAdmins(list) <= 1) throw new Error('Rocket needs at least one admin. Make someone else an admin first.');
       const changes = ['name', 'role', 'team', 'is_admin'].filter(k => p[k] !== t[k]).map(k => `${k}: ${t[k]} → ${p[k]}`).join(', ');
@@ -138,11 +141,35 @@ function demoAdmin(action, p) {
 }
 async function runAdmin(action, payload, okMsg, sub) {
   try {
-    if (LIVE) { await adminApi(action, payload); await Promise.all([loadAdmin(true), reloadLive()]); }
-    else demoAdmin(action, payload);
-    closeDialog(); render(); toast(okMsg, sub); return true;
+    let res;
+    if (LIVE) { res = await adminApi(action, payload); await Promise.all([loadAdmin(true), reloadLive()]); }
+    else res = demoAdmin(action, payload);
+    render();
+    if (res?.tempPassword) { const m = (adminData.members || state.members).find(x => x.id === payload.id || x.email === String(payload.email || '').toLowerCase());
+      showCredentials(m?.name || payload.name, m?.email || payload.email, res.tempPassword, action === 'invite'); }
+    else closeDialog();
+    toast(okMsg, sub); return true;
   } catch (e) {
     const err = $('#aerr'); if (err && dlg().open) err.textContent = e.message; else toast(e.message, '', true);
     return false;
   }
+}
+
+// Temporary passwords: shown once to the admin, with an easy way to send them.
+function demoTempPassword() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(12));
+  const c = [...b].map(x => abc[x % abc.length]).join(''); return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8)}`;
+}
+function showCredentials(name, email, temp, isNew) {
+  const first = String(name || '').split(' ')[0] || 'there', site = location.origin.startsWith('http') && !location.origin.includes('claude') ? location.origin : 'https://userocket.vercel.app';
+  const msg = `Hi ${first}! ${isNew ? 'You’re on Rocket, the AUS Launchpad ops app.' : 'Your Rocket password was reset.'}\n\nSign in at ${site}\nEmail: ${email}\nTemporary password: ${temp}\n\nYou’ll choose your own password right after signing in. On your phone, add Rocket to your home screen (Safari → Share → Add to Home Screen) and sign in there.`;
+  openDialog(`${dHead(isNew ? `${name} is on Rocket` : `New temporary password for ${name}`, 'Send them these details. The password is shown only once — Rocket doesn’t store it.')}
+    <div class="dlg-body">
+      <dl class="kv"><dt>Email</dt><dd class="mono">${esc(email)}</dd><dt>Temporary password</dt><dd><span class="mono" style="font-size:20px;letter-spacing:.06em;color:var(--amber)">${esc(temp)}</span>
+        <button type="button" class="btn sm btn-ghost" data-act="copy-text" data-v="${esc(temp)}" style="margin-left:6px">Copy</button></dd></dl>
+      <div class="field"><label for="cred-msg">Message to send</label><textarea class="input" id="cred-msg" rows="7" readonly>${esc(msg)}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-act="copy-text" data-v="${esc(msg)}">Copy message</button>
+        <a class="btn btn-wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener noreferrer">${ic('wa')}Send on WhatsApp</a></div>
+      <span class="muted-note">They must change it at first sign-in, so it only works once in practice. Send it privately.</span>
+    </div>${foot('<button type="button" class="btn btn-primary" data-act="close">Done</button>')}`, 'narrow');
 }

@@ -452,6 +452,8 @@ const ACT = {
   'admin-disable': el => runAdmin('disable', {id:el.dataset.id}, 'Login disabled', 'they can’t sign in or see any data'),
   'admin-enable': el => runAdmin('enable', {id:el.dataset.id}, 'Login re-enabled'),
   'admin-resend': el => runAdmin('resend', {id:el.dataset.id}, 'Sign-in code sent', LIVE ? 'they enter it on the sign-in screen' : 'simulated in the demo'),
+  'admin-reset': el => runAdmin('reset-password', {id:el.dataset.id}, 'Password reset', 'their old password no longer works'),
+  'copy-text': el => { try { navigator.clipboard.writeText(el.dataset.v).then(() => toast('Copied')).catch(() => { $('#cred-msg')?.select(); toast('Select the text and copy it', '', true); }); } catch (e) { toast('Select the text and copy it', '', true); } },
   'admin-remove': el => requestDeletion('member', el.dataset.id),
   notif: () => openNotifications(),
   'notif-open': el => { const a = el.dataset.a, id = el.dataset.id;
@@ -687,7 +689,7 @@ const FORMS = {
     const p = {name:String(fd.get('name')).trim(), email:String(fd.get('email')).trim(), role:fd.get('role'), team:fd.get('team'), is_admin:!!fd.get('is_admin')};
     if (!p.name) { $('#aerr').textContent = 'Add their name.'; return; }
     if (!/^[^@\s]+@aus\.edu$/i.test(p.email)) { $('#aerr').textContent = 'Use an @aus.edu email address.'; return; }
-    runAdmin('invite', p, `Invited ${p.name}`, LIVE ? `invitation sent to ${p.email}` : 'simulated — no email sent');
+    runAdmin('invite', p, `Invited ${p.name}`, 'account created — send them the temporary password');
   },
   'admin-edit'(f, fd) {
     if (!isAdmin()) return closeDialog();

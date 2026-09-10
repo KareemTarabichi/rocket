@@ -10,6 +10,13 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+// Readable one-time password, e.g. "Kp7m-X3qa-9Rtz" (no 0/O/1/l/I). Members replace it at first sign-in.
+function tempPassword() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const chars = [...bytes].map((b) => abc[b % abc.length]).join('');
+  return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`;
+}
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
@@ -71,16 +78,35 @@ Deno.serve(async (req) => {
       if (!name) return json({ error: 'Add the member’s name.' }, 400);
       if (!ROLES.includes(String(body.role))) return json({ error: 'Pick a club role.' }, 400);
       if (!TEAMS.includes(String(body.team))) return json({ error: 'Pick a team.' }, 400);
-      const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-        data: { name, role: body.role, team: body.team, is_admin: !!body.is_admin },
-        redirectTo,
+      // No email is sent (AUS email scanners use up one-time links). The admin shares a temporary
+      // password; Rocket makes the member choose their own at first sign-in (password_set: false).
+      const temp = tempPassword();
+      const { error } = await admin.auth.admin.createUser({
+        email, password: temp, email_confirm: true,
+        user_metadata: { name, role: body.role, team: body.team, is_admin: !!body.is_admin, password_set: false },
       });
       if (error) {
         const exists = /already|registered|exists/i.test(error.message);
         return json({ error: exists ? 'Someone with that email is already on Rocket.' : error.message }, 400);
       }
       await log('invite', email, `${body.role} · ${body.team}${body.is_admin ? ' · admin' : ''}`);
-      return json({ ok: true });
+      return json({ ok: true, tempPassword: temp });
+    }
+
+    case 'reset-password': {
+      const t = await getTarget();
+      if (!t) return json({ error: 'That member no longer exists.' }, 404);
+      if (t.id === me.id) return json({ error: 'Use “Change password” for your own account.' }, 400);
+      if (!t.active) return json({ error: 'Enable their login first.' }, 400);
+      const { data: u, error: gErr } = await admin.auth.admin.getUserById(t.id);
+      if (gErr) return json({ error: gErr.message }, 400);
+      const temp = tempPassword();
+      const { error } = await admin.auth.admin.updateUserById(t.id, {
+        password: temp, email_confirm: true, user_metadata: { ...(u.user?.user_metadata ?? {}), password_set: false },
+      });
+      if (error) return json({ error: error.message }, 400);
+      await log('reset-password', t.email);
+      return json({ ok: true, tempPassword: temp });
     }
 
     case 'update': {
