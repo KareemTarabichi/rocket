@@ -835,3 +835,9 @@ ol.setup code{font:12.5px var(--f-mono);background:var(--surface-raised);padding
   .links-save{bottom:calc(84px + env(safe-area-inset-bottom))}
   .links-save .btn{flex:1;justify-content:center;height:46px}
 }
+
+/* ===== Overview headline (rotating) ===== */
+.hero h1.tagline{min-height:2.5em;display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 10px;max-width:40ch;transition:opacity .4s ease}
+.hero h1.tagline.fade{opacity:0}
+.tagline-by{font:400 15px var(--f-body);color:var(--text-muted);white-space:nowrap}
+@media (max-width:760px){.hero h1.tagline{min-height:3.8em;font-size:18px}.tagline-by{font-size:13.5px}}

@@ -740,6 +740,7 @@ dlg().addEventListener('close', () => { draft = null; });
 $('#confirm').addEventListener('cancel', e => { e.preventDefault(); cancelDeletion(); });
 $('#confirm').addEventListener('close', () => { pendingDeletion = null; });
 (mq.addEventListener ? mq.addEventListener('change', render) : mq.addListener(render));
+setInterval(rotateTagline, 12000);   // Overview headline
 if (LIVE) liveBoot();
 else {
   initDemoState();

@@ -67,6 +67,33 @@ function moreSheet() {
 }
 
 /* ================= overview ================= */
+// The Overview headline: one of these, picked at random and rotated every few seconds.
+const TAGLINES = [
+  {t:'Welcome to Rocket. Everything Launchpad runs, in one place. Let’s build.'},
+  {t:'Ignition sequence complete. Let’s get to work.'},
+  {t:'You’re in. Time to launch something worth building.'},
+  {t:'“Stay hungry, stay foolish.”', by:'Steve Jobs'},
+  {t:'Welcome aboard. Every great launch starts with a small crew.'},
+  {t:'“Screw it, let’s do it.”', by:'Richard Branson'},
+  {t:'“It’s always Day 1.”', by:'Jeff Bezos'},
+  {t:'Fueled up, cleared for launch. Welcome to Rocket.'},
+  {t:'“The way to get started is to quit talking and begin doing.”', by:'Walt Disney'},
+  {t:'From idea to ignition, welcome to the crew.'},
+  {t:'Are you ready to get ignited?'},
+  {t:'T-minus zero. The countdown’s over. Go build.'},
+  {t:'Every rocket needs a spark. Consider this yours.'},
+  {t:'Some ideas just orbit. Others break gravity. Which one’s yours?'},
+  {t:'Welcome to Rocket, where Launchpad’s ideas actually take off.'}];
+let taglineIdx = Math.floor(Math.random() * TAGLINES.length);
+const taglineHtml = () => { const q = TAGLINES[taglineIdx]; return `${esc(q.t)}${q.by ? `<span class="tagline-by">— ${esc(q.by)}</span>` : ''}`; };
+function rotateTagline() {
+  const el = $('#tagline');
+  if (!el || document.visibilityState !== 'visible') return;
+  let next; do { next = Math.floor(Math.random() * TAGLINES.length); } while (next === taglineIdx && TAGLINES.length > 1);
+  el.classList.add('fade');
+  setTimeout(() => { taglineIdx = next; el.innerHTML = taglineHtml(); el.classList.remove('fade'); }, 400);
+}
+
 function vOverview() {
   const m = me(), um = upcomingMeetings(), ue = upcomingEvents(true), pend = pending(), ideas = state.ideas.filter(i => i.stage !== 'completed' && relevantIdea(i));
   const overdue = pend.filter(x => daysFrom(x.due) < 0).length, next = ue[0];
@@ -75,7 +102,7 @@ function vOverview() {
   return `<div class="page">
     <section class="hero" style="min-height:0">
       <div class="thermal"></div><div class="grain"></div>
-      <div><div class="hero-date">${dow}.${pad(now.getDate())}.${mon}</div><h1>Hi ${esc(m.name.split(' ')[0])} — here’s your ${esc(roleLabel(m.role))} view.</h1></div>
+      <div><div class="hero-date">${dow}.${pad(now.getDate())}.${mon}</div><h1 class="tagline" id="tagline" aria-live="off">${taglineHtml()}</h1></div>
       <div class="hero-summary">${overdue ? `<span class="hero-chip over"><b>${overdue}</b> overdue</span>` : ''}${um[0] ? `<span class="hero-chip">Next meeting: ${esc(um[0].title)} <b>${fmtDate(um[0].date, {day:'numeric', month:'short'})} ${fmtTime(um[0].start)}</b></span>` : ''}${bellBtn('page-bell')}</div>
     </section>
     <div class="sum-cards">
