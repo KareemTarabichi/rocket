@@ -1,0 +1,7 @@
+# Never publish these on the website.
+# supabase/ holds the database setup and the startup contact import (real phone numbers and emails).
+# js/demo-data.js holds the same contacts for the local demo; the live site loads startups from Supabase instead.
+supabase/
+js/demo-data.js
+README.md
+.gitignore
