@@ -3,6 +3,6 @@
 // Fill them in to go live. Both values are safe to publish: the anon key only allows what the
 // database's row-level security policies allow. NEVER put the service_role key here.
 window.ROCKET_CONFIG = {
-  supabaseUrl: '',      // e.g. 'https://abcdefghijklmnop.supabase.co'
-  supabaseAnonKey: '',  // Supabase dashboard → Project Settings → API → anon / public key
+  supabaseUrl: 'https://ptcsxotsucwaxqfrdlkd.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0Y3N4b3RzdWN3YXhxZnJkbGtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNjQ2NTcsImV4cCI6MjEwNDY0MDY1N30.FpAkmVz3iNeJPbt-p8B2-eCzfAdCN5wzhBfIsxiGy_o',  // public anon key
 };
