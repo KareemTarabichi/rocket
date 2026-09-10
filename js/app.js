@@ -344,8 +344,8 @@ function openNotifications() {
     : `<div class="nitem click" data-act="notif-open" data-a="${it.act}" data-id="${esc(it.id || '')}" tabindex="0"><span class="dot ${it.tone}"></span><div><div class="lbl">${esc(it.label)}</div><div class="ttl">${esc(it.title)}</div><div class="sb">${esc(it.sub)}</div></div><span class="faint" aria-hidden="true">›</span></div>`;
   openDialog(`<div class="dlg-head"><div style="flex:1"><h2>Notifications</h2><div class="sub">${items.length ? `${items.length} ${items.length === 1 ? 'thing needs' : 'things need'} your attention` : 'Nothing needs you right now'}</div></div>${closeBtn()}</div>
     <div style="padding-bottom:8px">${items.length ? `<div class="notif-sec">Needs your attention</div>${items.map(row).join('')}` : '<div class="empty">You’re all caught up.</div>'}
-      ${ups.length ? `<div class="notif-sec">Meeting updates</div>${ups.map(n => `<div class="nitem"><span class="dot ${new Date(n.at) > seen ? (n.kind === 'cancel' ? 'over' : '') : 'read'}"></span><div><div class="ttl">${esc(n.title)}</div><div class="sb">${esc(n.details)}</div></div><time>${fmtStamp(n.at)}</time></div>`).join('')}` : ''}</div>`, 'notif-pop');
-  markSeen(); render();
+      ${ups.length ? `<div class="notif-sec">Meeting updates</div>${ups.map(n => `<div class="nitem"><span class="dot ${new Date(n.at) > seen ? (n.kind === 'cancel' ? 'over' : '') : 'read'}"></span><div><div class="ttl">${esc(n.title)}</div><div class="sb">${esc(n.details)}</div></div><time>${fmtStamp(n.at)}</time></div>`).join('')}` : ''}<div id="push-row"></div></div>`, 'notif-pop');
+  markSeen(); render(); renderPushRow();
 }
 
 /* ================= deletion ================= */
@@ -376,12 +376,20 @@ function confirmDeletion() {
   if (p.kind === 'member') { cancelDeletion(); return runAdmin('remove', {id:rec.id}, `Removed ${rec.name}`, rec.email); }
   if (p.kind === 'startup') { state.startups = state.startups.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted ${rec.name}`, 'removed from the directory'); }
   if (p.kind === 'kb') { state.kb = state.kb.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted “${rec.title}”`); }
+  if (p.kind === 'meeting' && LIVE && rec.onCalendar && !p.calendarDone) {
+    p.calendarDone = true;
+    const btn = $('#confirm [data-act="del-confirm"]'); if (btn) { btn.disabled = true; btn.textContent = 'Cancelling invite…'; }
+    return calendarApi('cancel', {id:rec.id}).catch(e => toast('Google Calendar didn’t cancel the event: ' + e.message, 'the meeting is still deleted here', true)).finally(() => confirmDeletion());
+  }
+  let cancelId = null;
   if (p.kind === 'meeting') {
-    notify('cancel', `Meeting cancelled: ${rec.title}`, `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`, recipients(rec));
+    cancelId = notify('cancel', `Meeting cancelled: ${rec.title}`, `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`, recipients(rec));
     state.meetings = state.meetings.filter(x => x.id !== rec.id);
   } else state.ideas = state.ideas.filter(x => x.id !== rec.id);
   cancelDeletion();
-  finish(p.kind === 'meeting' ? `Deleted “${rec.title}”` : `Deleted idea “${rec.title}”`, p.kind === 'meeting' ? `cancellation sent to ${recipients(rec).length} (simulated)` : 'next step removed from Deadlines');
+  finish(p.kind === 'meeting' ? `Deleted “${rec.title}”` : `Deleted idea “${rec.title}”`,
+    p.kind === 'meeting' ? `cancellation sent to ${recipients(rec).length}${LIVE ? (rec.onCalendar ? ' · calendar event cancelled' : '') : ' (simulated)'}` : 'next step removed from Deadlines');
+  if (cancelId) afterSync(() => fnApi('push', 'notification', {id:cancelId}).catch(() => {}));
 }
 
 /* ================= toasts ================= */
@@ -389,6 +397,17 @@ function toast(msg, sub, warn) {
   const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : '');
   t.innerHTML = `<span>${esc(msg)}</span>${sub ? `<span class="mono">${esc(sub)}</span>` : ''}`;
   $('#toasts').appendChild(t); setTimeout(() => t.remove(), 3800);
+}
+
+/* ================= launch parameters =================
+   ?view=meetings opens a section (used by notification taps); ?calendar=connected|error comes back from Google. */
+function handleLaunchParams() {
+  const q = new URLSearchParams(location.search); if (![...q.keys()].length) return;
+  const v = q.get('view'); if (v && VIEWS[v] && access(v)) { view = v; render(); }
+  const c = q.get('calendar');
+  if (c === 'connected') { toast('Google Calendar connected', 'new meetings now send real invites'); if (ea()) { view = 'meetings'; render(); } }
+  if (c === 'error') toast('Google Calendar didn’t connect: ' + (q.get('reason') || 'unknown error'), '', true);
+  history.replaceState(null, '', location.pathname);
 }
 
 /* ================= navigation & render ================= */
@@ -436,6 +455,7 @@ const ACT = {
   'startup-request-send': el => { const reason = ($('#del-reason')?.value || '').trim();
     if (!access('startups')) return;
     cancelDeletion(); setStartupDeletion(el.dataset.id, {by:me().id, at:new Date().toISOString(), reason});
+    afterSync(() => fnApi('push', 'deletion-request', {id:el.dataset.id}).catch(() => {}));
     toast('Deletion requested', 'an admin or the President needs to approve it'); },
   'startup-keep': el => { const s = state.startups.find(x => x.id === el.dataset.id); if (!s?.deletion) return;
     const mine = s.deletion.by === me().id;
@@ -468,7 +488,23 @@ const ACT = {
   'edit-alloc': () => openAlloc(), 'new-expense': () => { if (access('budget')) openExpense(null); }, 'edit-expense': el => openExpense(el.dataset.id), 'new-reimb': () => openReimb(null), 'edit-reimb': el => openReimb(el.dataset.id),
   'edit-member': el => openMember(el.dataset.id), 'open-kb': el => openKB(el.dataset.id),
   'del-cancel': () => cancelDeletion(), 'del-confirm': () => confirmDeletion(),
-  'cal-disconnect': () => { if (!ea()) return; state.calendar = {connected:false, email:''}; finish('Google Calendar disconnected', 'simulated'); },
+  'cal-disconnect': async () => { if (!ea()) return;
+    if (!LIVE) { state.calendar = {connected:false, email:''}; return finish('Google Calendar disconnected', 'simulated'); }
+    try { await calendarApi('disconnect'); await reloadLive(); toast('Google Calendar disconnected', 'new meetings won’t send invites'); } catch (e) { toast(e.message, '', true); } },
+  'cal-connect': async el => { if (!ea() || !LIVE) return; el.disabled = true; el.textContent = 'Opening Google…';
+    try { const {url} = await calendarApi('auth-url'); location.href = url; } catch (e) { el.disabled = false; el.textContent = 'Connect Google Calendar'; toast('Couldn’t start the Google sign-in: ' + e.message, '', true); } },
+  'cal-sync-all': async el => { if (!ea() || !LIVE) return; el.disabled = true; el.textContent = 'Adding…';
+    try { const r = await calendarApi('sync-all'); await reloadLive(); toast(`Added ${r.synced} upcoming meeting${r.synced === 1 ? '' : 's'} to Google Calendar`, r.failed ? `${r.failed} failed` : 'invites sent'); } catch (e) { toast(e.message, '', true); el.disabled = false; } },
+  'push-on': async () => { await enablePush(); renderPushRow(); if (welcome) renderWelcomePush(); },
+  'push-off': async () => { await disablePush(); renderPushRow(); },
+  'push-test': () => fnApi('push', 'test').then(r => toast(r.sent ? 'Test notification sent' : 'No devices to send to', r.sent ? 'check this device' : '')).catch(e => toast(e.message, '', true)),
+  'welcome-next': () => { const steps = WELCOME_STEPS.filter(s => s !== 'install' || !isStandalone()); welcome.step = steps[Math.min(steps.indexOf(welcome.step) + 1, steps.length - 1)]; renderWelcome(); },
+  'welcome-back': () => { const steps = WELCOME_STEPS.filter(s => s !== 'install' || !isStandalone()); welcome.step = steps[Math.max(steps.indexOf(welcome.step) - 1, 0)]; renderWelcome(); },
+  'welcome-skip': () => closeWelcome(true),
+  'welcome-done': () => closeWelcome(true),
+  'welcome-platform': el => { welcome.platform = el.dataset.v; renderWelcome(); },
+  'welcome-install': () => { closeDialog(); showWelcome('install'); },
+  'pwa-install': () => installNow(),
   'ev-assign': el => { const a = draft.assigned, id = el.dataset.id; draft.assigned = a.includes(id) ? a.filter(x => x !== id) : [...a, id]; el.setAttribute('aria-pressed', draft.assigned.includes(id)); },
   'req-add': () => { draft.tasks.push({id:uid('r'), title:'', owner:me().id, due:draft.date < today() ? today() : addDays(today(), 7), done:false}); renderEventForm(); },
   'req-del': el => { draft.tasks = draft.tasks.filter(t => t.id !== el.dataset.id); renderEventForm(); },
@@ -540,10 +576,17 @@ const FORMS = {
     if (rec.end <= rec.start) { err.textContent = 'The meeting has to end after it starts, on the same day.'; return; }
     const now = recipients(rec); if (!now.length) { err.textContent = 'Invite at least one person or team.'; return; }
     const when = `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`;
-    if (prev) { const union = [...new Set([...recipients(prev), ...now])]; notify('update', `Meeting updated: ${rec.title}`, when, union); upsert(state.meetings, rec); finish('Meeting updated', `${union.length} notified (simulated)`); }
-    else { notify('invite', `Meeting invitation: ${rec.title}`, when, now); upsert(state.meetings, rec); finish('Meeting scheduled', `${now.length} invited (simulated)${state.calendar.connected ? ' · calendar' : ''}`); }
+    const liveNote = n => LIVE ? `${n} notified${state.calendar.connected ? ' · Google Calendar invite sent' : ''}` : `${n} notified (simulated)`;
+    let nid;
+    if (prev) { const union = [...new Set([...recipients(prev), ...now])]; nid = notify('update', `Meeting updated: ${rec.title}`, when, union); upsert(state.meetings, {...rec, onCalendar:prev.onCalendar}); finish('Meeting updated', liveNote(union.length)); }
+    else { nid = notify('invite', `Meeting invitation: ${rec.title}`, when, now); upsert(state.meetings, rec); finish('Meeting scheduled', liveNote(now.length)); }
+    afterSync(async () => {
+      if (state.calendar.connected) await calendarApi('sync', {id:rec.id}).then(() => { const m = state.meetings.find(x => x.id === rec.id); if (m) { m.onCalendar = true; render(); } })
+        .catch(e => toast('Saved, but the Google Calendar invite failed: ' + e.message, '', true));
+      await fnApi('push', 'notification', {id:nid}).catch(() => {});
+    });
   },
-  calendar(f, fd) { if (!ea()) return; state.calendar = {connected:true, email:fd.get('email').trim()}; finish('Google Calendar connected', 'simulated — no OAuth'); },
+  calendar(f, fd) { if (!ea() || LIVE) return; state.calendar = {connected:true, email:fd.get('email').trim()}; finish('Google Calendar connected', 'simulated — no OAuth'); },
   event(f) {
     const v = draft, err = $('#eerr'), existing = v._new ? null : eventById(v.id);
     if (existing && !canEvent(existing)) { toast('You can’t edit this event anymore', '', true); return closeDialog(); }
@@ -564,7 +607,8 @@ const FORMS = {
   task(f, fd) {
     const owner = oversight() ? fd.get('owner') : me().id, title = fd.get('title').trim(), due = fd.get('due');
     if (!title || !due) return toast('Add what needs doing and when', '', true);
-    state.tasks.push({id:uid('t'), title, owner, due, done:false, related:fd.get('related').trim() || 'Follow-up'});
+    const tid = uid('t'); state.tasks.push({id:tid, title, owner, due, done:false, related:fd.get('related').trim() || 'Follow-up'});
+    if (owner !== me().id) afterSync(() => fnApi('push', 'task', {id:tid}).catch(() => {}));
     finish('Follow-up added', `${member(owner).name} · ${fmtDate(due)}`);
   },
   design(f, fd) {
@@ -575,6 +619,7 @@ const FORMS = {
     if (!rec.event && !rec.campaign) { err.textContent = 'Pick an event or name the campaign.'; return; }
     if (prev && rec.status === 'completed' && prev.status !== 'completed') rec.previousStatus = prev.status;
     upsert(state.designs, rec); finish(prev ? 'Request saved' : 'Request created', `assigned to ${member(rec.owner).name}`);
+    if (rec.owner !== me().id && (!prev || prev.owner !== rec.owner)) afterSync(() => fnApi('push', 'design', {id:rec.id}).catch(() => {}));
   },
   startup(f) {
     if (!access('startups')) return closeDialog();
@@ -644,7 +689,10 @@ $('#confirm').addEventListener('close', () => { pendingDeletion = null; });
 if (LIVE) liveBoot();
 else {
   initDemoState();
+  registerSW();
   try { localStorage.setItem(KEY + '-probe', '1'); localStorage.removeItem(KEY + '-probe'); } catch (e) { storageOk = false; }
   save();
   render();
+  handleLaunchParams();
+  maybeShowWelcome();
 }

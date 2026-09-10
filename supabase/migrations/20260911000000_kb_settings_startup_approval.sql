@@ -134,3 +134,8 @@ create function public.startups_guard() returns trigger
   end $$;
 create trigger startups_guard before update on public.startups
   for each row execute function public.startups_guard();
+
+-- Data API access for the new tables (see the note at the end of the init migration)
+grant select, insert, update, delete on public.app_settings, public.kb_articles to authenticated;
+grant all on public.app_settings, public.kb_articles to service_role;
+revoke all on public.app_settings, public.kb_articles from anon;

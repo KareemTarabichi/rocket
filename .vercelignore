@@ -5,3 +5,6 @@ supabase/
 js/demo-data.js
 README.md
 .gitignore
+scripts/
+*.local.sql
+.env.push

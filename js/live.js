@@ -12,7 +12,6 @@ let syncChain = Promise.resolve();
 const t5 = t => (t || '').slice(0, 5);
 const COLLECTIONS = [
   {key:'profiles', table:'profiles', mode:'update', get:() => state.members, to:m => ({id:m.id, responsibility:m.responsibility})},
-  {key:'calendar', table:'calendar_settings', single:true, to:() => ({id:1, connected:state.calendar.connected, email:state.calendar.email})},
   {key:'budget', table:'budget_settings', single:true, to:() => ({id:1, overall:+state.budget.overall || 0, allocations:state.budget.allocations})},
   {key:'meetings', table:'meetings', get:() => state.meetings, to:m => ({id:m.id, title:m.title, date:m.date, start_time:m.start, end_time:m.end, location:m.location, agenda:m.agenda, mode:m.mode, team_ids:m.teamIds, attendee_ids:m.attendees})},
   {key:'notifications', table:'notifications', mode:'insert', get:() => state.notifications, to:n => ({id:n.id, kind:n.kind, title:n.title, details:n.details, recipient_ids:n.recipients, calendar:!!n.calendar})},
@@ -48,9 +47,9 @@ async function buildState(userId) {
   if (!mine || !mine.active) return null;
   return {
     version:2, role:mine.role, meId:mine.id, members,
-    meetings:m.map(x => ({id:x.id, title:x.title, date:x.date, start:t5(x.start_time), end:t5(x.end_time), location:x.location, agenda:x.agenda, mode:x.mode, teamIds:x.team_ids || [], attendees:x.attendee_ids || []})),
+    meetings:m.map(x => ({id:x.id, title:x.title, date:x.date, start:t5(x.start_time), end:t5(x.end_time), location:x.location, agenda:x.agenda, mode:x.mode, teamIds:x.team_ids || [], attendees:x.attendee_ids || [], onCalendar:!!x.google_event_id})),
     notifications:n.map(x => ({id:x.id, kind:x.kind, title:x.title, details:x.details, recipients:x.recipient_ids || [], at:x.created_at, calendar:x.calendar})),
-    calendar:{connected:!!cal?.connected, email:cal?.email || ''},
+    calendar:{connected:!!cal?.connected, email:cal?.email || '', connectedAt:cal?.connected_at || null},
     events:ev.map(x => ({id:x.id, name:x.name, description:x.description, date:x.date, location:x.location, team:x.team, assigned:x.assigned || [], createdBy:x.created_by,
       tasks:rq.filter(r => r.event_id === x.id).map(r => ({id:r.id, title:r.title, owner:r.owner, due:r.due, done:r.done}))})),
     tasks:t.map(x => ({id:x.id, title:x.title, owner:x.owner, due:x.due, done:x.done, related:x.related})),
@@ -146,9 +145,10 @@ async function enterApp(session) {
     state = next; takeSnapshot();
     document.body.classList.remove('is-login'); $('#login').innerHTML = '';
     view = 'overview'; render();
+    handleLaunchParams(); maybeShowWelcome();
   } catch (e) { showLogin(`<span class="err">Couldn’t load Rocket: ${esc(e.message)}</span>`); }
 }
-async function signOut() { await sb.auth.signOut(); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }
+async function signOut() { await disablePush(true); await sb.auth.signOut(); closeWelcome(false); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }
 
 // Knowledge-base images go to the public "kb-images" storage bucket; only admins can upload.
 async function uploadKbImage(file) {
@@ -158,11 +158,16 @@ async function uploadKbImage(file) {
   if (error) throw error;
   return sb.storage.from('kb-images').getPublicUrl(path).data.publicUrl;
 }
-async function adminApi(action, payload = {}) {
-  const {data, error} = await sb.functions.invoke('admin-users', {body:{action, ...payload, redirectTo:location.origin + location.pathname}});
+// Calls one of Rocket's Edge Functions as the signed-in member and surfaces its error message.
+async function fnApi(fn, action, payload = {}) {
+  const {data, error} = await sb.functions.invoke(fn, {body:{action, ...payload, redirectTo:location.origin + location.pathname}});
   if (error) { let msg = error.message; try { msg = (await error.context.json()).error || msg; } catch (e) {} throw new Error(msg); }
   return data;
 }
+const adminApi = (action, payload) => fnApi('admin-users', action, payload);
+const calendarApi = (action, payload) => fnApi('google-calendar', action, payload);
+// Runs fn once the pending database writes have finished (live mode only).
+function afterSync(fn) { if (!LIVE) return; syncChain = syncChain.then(fn).catch(e => console.warn(e)); }
 
 async function liveBoot() {
   if (!window.supabase) { document.body.innerHTML = '<p style="padding:24px;color:#F5F4F7;background:#0A0A0C">Couldn’t load the Supabase library. Check your connection and reload.</p>'; return; }
@@ -173,6 +178,7 @@ async function liveBoot() {
     if (session && !entered && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) { entered = true; setTimeout(() => enterApp(session)); }
     if (!session && event === 'INITIAL_SESSION') showLogin();
   });
+  registerSW();
   // Pick up other members' changes when you come back to the tab.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state && !dlg().open) reloadLive().catch(() => {}); });
 }

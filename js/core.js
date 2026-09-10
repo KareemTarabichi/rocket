@@ -258,8 +258,10 @@ function audienceText(m) {
   return parts.join(', ') || 'No one yet';
 }
 function notify(kind, title, details, ids) {
-  state.notifications.unshift({id:uid('n'), kind, title, details, recipients:[...new Set(ids)], at:new Date().toISOString(), calendar:state.calendar.connected});
+  const n = {id:uid('n'), kind, title, details, recipients:[...new Set(ids)], at:new Date().toISOString(), calendar:state.calendar.connected};
+  state.notifications.unshift(n);
   state.notifications = state.notifications.slice(0, 100);
+  return n.id;
 }
 const visibleNotifications = () => oversight() ? state.notifications : state.notifications.filter(n => n.recipients.includes(me().id));
 

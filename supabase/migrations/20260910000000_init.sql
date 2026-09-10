@@ -406,3 +406,14 @@ create policy reimb_all     on public.reimbursements for all using (has_section(
 
 -- admin log: admins read; only the admin API (service role) writes
 create policy admin_log_read on public.admin_log for select using (is_admin());
+
+-- ─────────────────────────────────────────────────────────────
+-- Data API access. "Automatically expose new tables" is off, so grant explicitly:
+-- signed-in members get table access (row-level security still decides which rows);
+-- anonymous visitors get none; the admin API's service role gets full access.
+-- ─────────────────────────────────────────────────────────────
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+revoke all on all tables in schema public from anon;

@@ -38,7 +38,8 @@ function renderShell() {
     <nav class="nav" aria-label="Sections"><div class="eyebrow nav-label">${esc(roleLabel(state.role))} workspace</div>${SECTIONS.filter(s => access(s[0])).map(navItem).join('')}</nav>
     <div class="side-foot">${LIVE ? `
       <div class="whoami" style="flex-direction:row;align-items:center;gap:10px">${avatar(me().id)}<div style="min-width:0;flex:1"><div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(me().name)}</div><div class="faint" style="font-size:11.5px">${esc(roleLabel(state.role))}${isAdmin() ? ' · Admin' : ''}</div></div>
-        <button class="btn btn-ghost sm icon-btn" data-act="sign-out" aria-label="Sign out" title="Sign out">${ic('logout')}</button></div>` : `
+        <button class="btn btn-ghost sm icon-btn" data-act="sign-out" aria-label="Sign out" title="Sign out">${ic('logout')}</button></div>
+      ${isStandalone() ? '' : `<button class="linkbtn" data-act="welcome-install" style="padding:0 4px">${ic('plus')} Install Rocket on this device</button>`}` : `
       <div class="whoami role-sw"><label for="role-d">Demo role switcher</label>${roleSelect('role-d')}<span class="faint" style="font-size:11.5px">No sign-in in this demo. Pick a role to see its view. Tech is also the platform admin.</span></div>
       <div style="display:flex;gap:14px;padding:0 4px"><button class="linkbtn" data-act="reset">Reset demo data</button></div>`}
     </div>`;
@@ -55,6 +56,7 @@ function moreSheet() {
     <div class="dlg-body">
       <div class="more-grid">${extra.map(([k, l, i]) => `<a href="#" data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ''}>${ic(i)}${l}</a>`).join('')}</div>
       ${LIVE ? `<p class="muted-note" style="margin:0">Signed in as <span class="mono">${esc(me().email)}</span>${isAdmin() ? ' · Admin' : ''}</p>
+      ${isStandalone() ? '' : `<button class="btn" data-act="welcome-install" style="justify-content:center">${ic('plus')}Add Rocket to your home screen</button>`}
       <button class="btn" data-act="sign-out" style="justify-content:center">${ic('logout')}Sign out</button>` : `
       <div class="field role-sw"><label for="role-m">Demo role switcher</label>${roleSelect('role-m')}</div>
       <p class="muted-note" style="margin:0">One sample member per role. Switching updates sections, records and permissions straight away. Tech is also the platform admin.</p>
@@ -107,9 +109,23 @@ function meetingRow(m) {
   const n = recipients(m).length, ended = meetingEnded(m);
   return `<div class="mt-row ${ended ? 'past' : ''}" data-act="open-meeting" data-id="${m.id}" tabindex="0">
     <div class="datebox"><div class="m">${fmtDate(m.date, {month:'short'})}</div><div class="d">${parseD(m.date).getDate()}</div></div>
-    <div style="min-width:0"><div class="row-title">${esc(m.title)}</div><div class="row-sub">${fmtTime(m.start)}–${fmtTime(m.end)} · ${esc(m.location)}</div><div class="aud">${esc(audienceText(m))} · ${n} ${n === 1 ? 'person' : 'people'}</div></div>
+    <div style="min-width:0"><div class="row-title">${esc(m.title)}</div><div class="row-sub">${fmtTime(m.start)}–${fmtTime(m.end)} · ${esc(m.location)}</div><div class="aud">${esc(audienceText(m))} · ${n} ${n === 1 ? 'person' : 'people'}${m.onCalendar ? ' · <span style="color:var(--cyan)">on Google Calendar</span>' : ''}</div></div>
     ${meetingLive(m) ? '<span class="pill live">Now</span>' : ended ? '<span class="pill e-done">Ended</span>' : daysFrom(m.date) === 0 ? '<span class="pill e-logistics">Today</span>' : `<span class="num faint" style="font-size:12px">${relDue(m.date)}</span>`}
   </div>`;
+}
+function calendarPanel(cal, list) {
+  if (!LIVE) return `${cal.connected ? `<div style="font-size:13.5px">Invites are mirrored to <span class="mono">${esc(cal.email)}</span>.</div>` : '<div class="muted" style="font-size:13.5px">When connected, invitations and cancellations are also marked as sent to Google Calendar.</div>'}
+    ${ea() ? (cal.connected ? `<div><button class="btn sm" data-act="cal-disconnect">Disconnect</button></div>`
+      : `<form data-form="calendar" style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" type="email" name="email" required placeholder="launchpad.club@gmail.com" aria-label="Calendar email" style="flex:1;min-width:180px"><button class="btn sm">Connect</button></form>`)
+      : '<span class="faint" style="font-size:12.5px">Managed by the Executive Assistant.</span>'}
+    <span class="muted-note">Demo — the live app connects to Google for real.</span>`;
+  const missing = upcomingMeetings().filter(m => !m.onCalendar).length;
+  if (cal.connected) return `<div style="font-size:13.5px">Meetings are created on <span class="mono">${esc(cal.email)}</span>’s calendar, and Google emails each attendee an invite. Changes and cancellations update it too.</div>
+    ${ea() ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${missing ? `<button class="btn sm btn-primary" data-act="cal-sync-all">Add ${missing} upcoming meeting${missing === 1 ? '' : 's'} to the calendar</button>` : ''}<button class="btn sm" data-act="cal-disconnect">Disconnect</button></div>` : ''}`;
+  return ea() ? `<div class="muted" style="font-size:13.5px">Connect the club’s Google account. Every meeting you schedule then becomes a calendar event with real invites to the attendees’ AUS email.</div>
+      <div><button class="btn btn-primary sm" data-act="cal-connect">${ic('cal')}Connect Google Calendar</button></div>
+      <span class="muted-note">Use a shared Launchpad account rather than your personal one, so it survives handovers.</span>`
+    : '<span class="faint" style="font-size:12.5px">Not connected yet. The Executive Assistant connects it.</span>';
 }
 function vMeetings() {
   const list = filters.meetings === 'upcoming' ? upcomingMeetings() : visibleMeetings(), notes = visibleNotifications();
@@ -121,17 +137,11 @@ function vMeetings() {
     <div class="split">
       <section class="panel">${list.map(meetingRow).join('') || '<div class="empty">No meetings to show.</div>'}</section>
       <div class="stackcol">
-        <section class="panel"><div class="panel-head"><h2>Google Calendar</h2><span class="pill ${cal.connected ? 's-done' : 's-not_started'}">${cal.connected ? 'Connected (simulated)' : 'Not connected'}</span></div>
-          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-            ${cal.connected ? `<div style="font-size:13.5px">Invites are mirrored to <span class="mono">${esc(cal.email)}</span>.</div>` : '<div class="muted" style="font-size:13.5px">When connected, invitations and cancellations are also marked as sent to Google Calendar.</div>'}
-            ${ea() ? (cal.connected ? `<div><button class="btn sm" data-act="cal-disconnect">Disconnect</button></div>`
-              : `<form data-form="calendar" style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" type="email" name="email" required placeholder="launchpad.club@gmail.com" aria-label="Calendar email" style="flex:1;min-width:180px"><button class="btn sm">Connect</button></form>`)
-              : '<span class="faint" style="font-size:12.5px">Managed by the Executive Assistant.</span>'}
-            <span class="muted-note">Simulation only — no OAuth and no calls to Google.</span>
-          </div></section>
+        <section class="panel"><div class="panel-head"><h2>Google Calendar</h2><span class="pill ${cal.connected ? 's-done' : 's-not_started'}">${cal.connected ? (LIVE ? 'Connected' : 'Connected (simulated)') : 'Not connected'}</span></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">${calendarPanel(cal, list)}</div></section>
         <section class="panel"><div class="panel-head"><h2>Notification log</h2><span class="num faint" style="font-size:12px">${notes.length}</span></div>
           <div style="max-height:420px;overflow:auto">${notes.slice(0, 30).map(n => `<div class="notif ${n.kind === 'cancel' ? 'cancel' : ''}"><span class="k">${esc(n.title)}</span><time>${fmtStamp(n.at)}</time><span class="d">${esc(n.details)} · to ${n.recipients.length} ${n.recipients.length === 1 ? 'person' : 'people'}${n.calendar ? ' · calendar' : ''}</span></div>`).join('') || '<div class="empty">No notifications for you yet.</div>'}</div>
-          <div class="muted-note" style="padding:10px 16px;border-top:1px solid var(--border)">Simulated — nothing is emailed. Keeps the latest 100.</div></section>
+          <div class="muted-note" style="padding:10px 16px;border-top:1px solid var(--border)">${LIVE ? 'Sent as phone notifications to members who turned them on, and as Google Calendar invites when the calendar is connected. Keeps the latest 100.' : 'Simulated — nothing is emailed. Keeps the latest 100.'}</div></section>
       </div>
     </div>
   </div>`;

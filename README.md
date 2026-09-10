@@ -39,7 +39,7 @@ You need free accounts on **Supabase** and **Vercel** (and optionally GitHub). R
 
 1. In Supabase, create a new project. Pick the region closest to the UAE that's offered, and save the database password somewhere safe.
 2. Open **SQL Editor → New query**, paste the whole of `supabase/migrations/20260910000000_init.sql`, and run it.
-3. New query: paste `supabase/migrations/20260911000000_kb_settings_startup_approval.sql` and run it. This adds the editable knowledge base (with 12 starter articles), the Design Drive setting, image uploads for articles, and approval-gated startup deletion.
+3. New query: paste `supabase/migrations/20260911000000_kb_settings_startup_approval.sql` and run it. Then do the same with `supabase/migrations/20260912000000_calendar_and_push.sql` (Google Calendar and phone notifications). This adds the editable knowledge base (with 12 starter articles), the Design Drive setting, image uploads for articles, and approval-gated startup deletion.
 4. New query: paste `supabase/import_startups.sql` and run it. The Startup Directory now has your 56 startups.
 
 ### 2. Lock down sign-in
@@ -119,10 +119,35 @@ Admin is a platform permission on top of a club role. It does **not** grant club
 
 The bell (top right of every page, or the top bar on phones) lists what needs *you*: your deadlines that are overdue or due within a day, meetings today or tomorrow, new design work, reviews waiting for PR, ideas to review (leadership), reimbursements to approve (budget roles) and startup deletions to decide (admins and the President). Meeting invitations, changes and cancellations addressed to you appear underneath. The unread marker is kept per browser.
 
+## Google Calendar (real invites)
+
+Once connected, every meeting the Executive Assistant schedules becomes an event on the club Google account's calendar, and Google emails each attendee an invite at their AUS address. Edits and cancellations update the event. Set up once:
+
+1. **Google Cloud Console** (console.cloud.google.com), signed in with the club's Google account → create a project called `Rocket`.
+2. **APIs & Services → Library** → enable **Google Calendar API**.
+3. **APIs & Services → OAuth consent screen** → User type **External** → app name `Rocket`, your support email → add the scope `.../auth/calendar.events` → then **Publish app** (to "In production"). You don't need Google's verification; the one person who connects will see an "unverified app" warning and can continue. Leaving it in "Testing" makes the connection expire every 7 days.
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID** → type **Web application** → Authorised redirect URI: `https://ptcsxotsucwaxqfrdlkd.supabase.co/functions/v1/google-calendar` → create, and keep the client ID and secret.
+5. In Terminal (in this folder):
+   `supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…`
+   `supabase functions deploy google-calendar --use-api --no-verify-jwt`
+6. Sign in to Rocket as the Executive Assistant → **Meetings → Connect Google Calendar** → pick the club Google account.
+
+## Phone notifications
+
+Members turn notifications on from the bell (or the welcome screen). On iPhone they must first add Rocket to the home screen (iOS 16.4+). Notifications go out for meeting invitations, changes and cancellations; design requests and follow-ups assigned to you; startup deletion requests (admins and the President); and a 9 AM summary of what's overdue or due today.
+
+Set up once, in Terminal (in this folder):
+
+1. `node scripts/make-push-keys.mjs` — creates `.env.push` (private) and `push-cron.local.sql`, and prints the public key for `config.js`. (Already done for this project.)
+2. `supabase secrets set --env-file .env.push`
+3. `supabase functions deploy push --use-api --no-verify-jwt`
+4. Paste `push-cron.local.sql` into the Supabase SQL editor and run it — this schedules the 9 AM summary.
+
+Keep `.env.push` safe (for example in your password manager) and never commit it.
+
 ## Still simulated in live mode
 
-- Meeting invitations, updates and cancellations are recorded in the notification log but **not emailed**.
-- The Google Calendar connection is a switch only — no OAuth, no calendar entries.
+- Without Google Calendar connected, meeting invitations are only in-app and push notifications — nothing is emailed.
 - Receipts store the filename only.
 - Knowledge-base images are stored in a public bucket: anyone with an image's link can open it. Don't upload anything confidential.
 - Other people's changes appear when you reload or come back to the tab (no live push yet).
