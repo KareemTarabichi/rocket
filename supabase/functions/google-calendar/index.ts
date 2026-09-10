@@ -4,7 +4,8 @@
 // real invite; edits and cancellations update it. Tokens never leave the server.
 //
 // Deploy with --no-verify-jwt: Google's redirect back (GET ?code=…) carries no Supabase login.
-// Every POST action verifies the caller's Supabase session itself and requires the Executive Assistant.
+// Every POST action verifies the caller's Supabase session. Admins and the Executive Assistant manage the
+// connection; only the Executive Assistant's meeting changes create, update or cancel events.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -116,16 +117,24 @@ Deno.serve(async (req) => {
   }
 
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405);
-  if (!CLIENT_ID || !CLIENT_SECRET) return json({ error: 'Google Calendar isn’t set up on the server yet (missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).' }, 500);
 
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   const { data: auth } = await db.auth.getUser(jwt);
   if (!auth?.user) return json({ error: 'Your session has expired. Sign in again.' }, 401);
-  const { data: me } = await db.from('profiles').select('id, role, active').eq('id', auth.user.id).single();
-  if (!me?.active || me.role !== 'ea') return json({ error: 'Only the Executive Assistant manages the club calendar.' }, 403);
+  const { data: me } = await db.from('profiles').select('id, role, is_admin, active').eq('id', auth.user.id).single();
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* empty body */ }
+
+  // Admins manage the connection (it's platform setup); meeting invites stay with the Executive Assistant.
+  const connectionAction = ['status', 'auth-url', 'disconnect', 'sync-all'].includes(String(body.action));
+  if (!me?.active || !(me.role === 'ea' || (me.is_admin && connectionAction)))
+    return json({ error: 'Only the Executive Assistant or an admin manages the club calendar.' }, 403);
+  if (body.action === 'status') {
+    const { data: c } = await db.from('calendar_settings').select('connected, email, connected_at').eq('id', 1).maybeSingle();
+    return json({ ok: true, configured: !!(CLIENT_ID && CLIENT_SECRET), connected: !!c?.connected, email: c?.email ?? '', connectedAt: c?.connected_at ?? null, redirectUri: REDIRECT_URI });
+  }
+  if (!CLIENT_ID || !CLIENT_SECRET) return json({ error: 'Google Calendar isn’t set up on the server yet (missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).' }, 500);
 
   try {
     switch (body.action) {

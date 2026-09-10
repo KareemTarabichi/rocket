@@ -20,8 +20,11 @@ async function loadAdmin(force) {
   if (view === 'admin') render();
 }
 
+let adminTab = 'members';
+const adminTabs = () => `<div class="tabs" role="tablist">${[['members', 'Members'], ['links', 'Links']].map(([v, l]) => `<button role="tab" data-act="admin-tab" data-v="${v}" aria-selected="${adminTab === v}">${l}</button>`).join('')}</div>`;
 function vAdmin() {
   if (!isAdmin()) return '<div class="page"><div class="panel empty">Only admins can open this section.</div></div>';
+  if (adminTab === 'links') return vAdminLinks();
   if (!LIVE) loadAdmin();
   else if (!adminData.members && !adminData.loading && !adminData.error) loadAdmin();
   const list = adminData.members;
@@ -34,7 +37,7 @@ function vAdmin() {
   const rows = [...list].sort((a, b) => ({invited:0, disabled:1, active:2}[memberStatus(a)] - {invited:0, disabled:1, active:2}[memberStatus(b)]) || a.name.localeCompare(b.name));
   const lastSeen = m => m.last_sign_in_at ? fmtStamp(m.last_sign_in_at) : m.invited_at ? `Invited ${fmtStamp(m.invited_at)}` : '—';
   return `<div class="page">
-    ${head}
+    ${head}${adminTabs()}
     ${LIVE ? '' : readonlyNote('Demo: admin actions are simulated here. In the live app they go through a server-side admin API; no emails are sent from this demo.')}
     <div class="sum-cards">
       <div class="sum-card" style="cursor:default"><span class="v">${list.length}</span><span class="l">Members</span></div>
@@ -48,12 +51,6 @@ function vAdmin() {
       return `<tr data-act="admin-edit" data-id="${m.id}"><td><div class="who">${avatar(m.id)}<span><span class="name">${esc(m.name)}</span>${m.id === me().id ? ' <span class="faint">(you)</span>' : ''}</span></div><div class="mono faint" style="font-size:12px;margin-top:2px">${esc(m.email)}</div></td>
         <td style="white-space:nowrap">${esc(roleLabel(m.role))}</td><td>${esc(teamName(m.team))}</td><td>${m.is_admin ? '<span class="tag for-you">Admin</span>' : '<span class="faint">Member</span>'}</td>
         <td><span class="pill ${c}">${esc(l)}</span></td><td class="num muted" style="font-size:12.5px;white-space:nowrap">${lastSeen(m)}</td></tr>`; }).join('')}</tbody></table></div>`}
-    <section class="panel"><div class="panel-head"><h2>Links</h2><span class="faint" style="font-size:12.5px">Shown to PR, Media, Graphic Design and leadership</span></div>
-      <form data-form="settings" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px" novalidate>
-        <label for="f-drive" style="font-size:12.5px;color:var(--text-muted);font-weight:500">Design Drive — the Google Drive folder with guidelines and assets</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" id="f-drive" name="designDriveUrl" type="url" value="${esc(state.settings?.designDriveUrl || '')}" placeholder="https://drive.google.com/drive/folders/…" style="flex:1;min-width:220px"><button class="btn">Save link</button></div>
-        <span class="muted-note">Make sure the folder is shared with the club’s AUS accounts in Google Drive — Rocket only stores the link.</span>
-      </form></section>
     <section class="panel"><div class="panel-head"><h2>Admin activity</h2><span class="faint" style="font-size:12.5px">Latest ${Math.min(adminData.log.length, 50)}</span></div>
       <div>${adminData.log.slice(0, 50).map(l => `<div class="notif ${l.action === 'remove' || l.action === 'disable' ? 'cancel' : ''}"><span class="k">${esc(actor(l.actor))} · ${esc(ADMIN_ACTION[l.action] || l.action)} ${esc(l.target_email)}</span><time>${fmtStamp(l.created_at)}</time>${l.details ? `<span class="d">${esc(l.details)}</span>` : ''}</div>`).join('') || '<div class="empty">No admin actions yet.</div>'}</div></section>
   </div>`;
@@ -77,7 +74,7 @@ function openAdminEdit(id) {
   const st = memberStatus(m), self = m.id === me().id, lastAdmin = m.is_admin && m.active !== false && activeAdmins(list) <= 1;
   openDialog(`<form data-form="admin-edit" data-id="${m.id}" novalidate>${dHead(m.name, `<span class="mono">${esc(m.email)}</span>`, `<span class="pill ${STATUS_PILL[st][0]}">${STATUS_PILL[st][1]}</span>${m.is_admin ? '<span class="tag for-you">Admin</span>' : ''}`)}
     <div class="dlg-body">
-      ${field('Full name', inp('name', m.name, 'required'), 'f-name')}
+      <div class="grid2">${field('Full name', inp('name', m.name, 'required'), 'f-name')}${field('WhatsApp number', inp('whatsapp', m.whatsapp || '', 'type="tel" inputmode="tel" placeholder="+971 50 123 4567"'), 'f-whatsapp')}</div>
       <div class="grid2">${field('Club role', `<select class="input" id="f-role" name="role">${ROLES.map(r => opt(r.id, r.label, m.role)).join('')}</select>`, 'f-role')}${field('Team', `<select class="input" id="f-team" name="team">${teamOpts(m.team)}</select>`, 'f-team')}</div>
       <label class="cbox"><input type="checkbox" name="is_admin" ${m.is_admin ? 'checked' : ''} ${lastAdmin ? 'disabled' : ''}>Admin</label>
       ${lastAdmin ? '<span class="muted-note">This is the only admin, so admin rights can’t be removed. Make someone else an admin first.</span>' : ''}
@@ -113,7 +110,7 @@ function demoAdmin(action, p) {
     case 'update': {
       if (t.is_admin && !p.is_admin && t.active !== false && activeAdmins(list) <= 1) throw new Error('Rocket needs at least one admin. Make someone else an admin first.');
       const changes = ['name', 'role', 'team', 'is_admin'].filter(k => p[k] !== t[k]).map(k => `${k}: ${t[k]} → ${p[k]}`).join(', ');
-      Object.assign(t, {name:p.name.trim() || t.name, role:p.role, team:p.team, is_admin:!!p.is_admin});
+      Object.assign(t, {name:p.name.trim() || t.name, role:p.role, team:p.team, is_admin:!!p.is_admin});   // WhatsApp number is saved separately
       if (t.id === state.meId) state.role = t.role;
       logIt('update', t.email, changes || 'no changes'); break;
     }
@@ -172,4 +169,62 @@ function showCredentials(name, email, temp, isNew) {
         <a class="btn btn-wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener noreferrer">${ic('wa')}Send on WhatsApp</a></div>
       <span class="muted-note">They must change it at first sign-in, so it only works once in practice. Send it privately.</span>
     </div>${foot('<button type="button" class="btn btn-primary" data-act="close">Done</button>')}`, 'narrow');
+}
+
+/* ---- Admin → Links: every outside link Rocket uses, in one place ---- */
+async function loadCalendarStatus() {
+  if (!LIVE) { adminData.calendar = {configured:true, connected:state.calendar.connected, email:state.calendar.email}; return; }
+  adminData.calendar = {loading:true};
+  try { adminData.calendar = await calendarApi('status'); }
+  catch (e) { adminData.calendar = {error:e.message, notDeployed:/NOT_DEPLOYED|Failed to send|not found/i.test(e.message)}; }
+  if (view === 'admin' && adminTab === 'links') render();
+}
+function calendarCard() {
+  const c = adminData.calendar;
+  if (!c) { loadCalendarStatus(); return '<div class="faint">Checking…</div>'; }
+  if (c.loading) return '<div class="faint">Checking…</div>';
+  const cmd = s => `<pre class="cmd">${esc(s)}</pre>`, redirect = (CFG.supabaseUrl || '') + '/functions/v1/google-calendar';
+  if (c.notDeployed) return `<div class="del-pending" style="border-color:rgba(245,185,66,.45);background:var(--amber-soft)"><div><b style="color:var(--amber)">Not set up yet.</b> The calendar function isn’t deployed.</div></div>
+    <ol class="setup">
+      <li>In <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>, signed in as the <b>club’s</b> Google account: create a project, enable <b>Google Calendar API</b>, set up the <b>OAuth consent screen</b> (External, scope <code>calendar.events</code>) and <b>publish</b> it.</li>
+      <li>Create an <b>OAuth client ID</b> (Web application) with this redirect URI: <span class="mono" style="overflow-wrap:anywhere">${esc(redirect)}</span> <button type="button" class="btn sm btn-ghost" data-act="copy-text" data-v="${esc(redirect)}">Copy</button></li>
+      <li>In Terminal, in the Rocket folder:${cmd('supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…')}${cmd('supabase functions deploy google-calendar --use-api --no-verify-jwt')}</li>
+      <li>Come back here and press <b>Check again</b>, then <b>Connect</b>.</li></ol>
+    <div><button type="button" class="btn sm" data-act="cal-status">Check again</button></div>`;
+  if (c.error) return `<div class="err">${esc(c.error)}</div><div><button type="button" class="btn sm" data-act="cal-status">Check again</button></div>`;
+  if (!c.configured) return `<div class="del-pending" style="border-color:rgba(245,185,66,.45);background:var(--amber-soft)"><div><b style="color:var(--amber)">Almost there.</b> The function is deployed but has no Google client details.</div></div>
+    ${cmd('supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…')}<span class="muted-note">Redirect URI for the Google OAuth client: <span class="mono">${esc(redirect)}</span></span>
+    <div><button type="button" class="btn sm" data-act="cal-status">Check again</button></div>`;
+  const missing = upcomingMeetings().filter(m => !m.onCalendar).length;
+  if (c.connected) return `<div style="display:flex;align-items:center;gap:10px"><span class="pill s-done">Connected</span><span class="mono" style="font-size:13px">${esc(c.email)}</span></div>
+    <span class="muted-note">Meetings the Executive Assistant schedules become events on this account’s calendar, with Google invites to each attendee.</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${missing ? `<button type="button" class="btn sm btn-primary" data-act="cal-sync-all">Add ${missing} upcoming meeting${missing === 1 ? '' : 's'}</button>` : ''}<button type="button" class="btn sm" data-act="cal-disconnect">Disconnect</button></div>`;
+  return `<div style="display:flex;align-items:center;gap:10px"><span class="pill s-not_started">Not connected</span></div>
+    <span class="muted-note">Sign in with the club’s shared Google account (not a personal one) so it survives handovers.</span>
+    <div>${LIVE ? `<button type="button" class="btn sm btn-primary" data-act="cal-connect">${ic('cal')}Connect Google Calendar</button>` : `<button type="button" class="btn sm btn-primary" data-act="cal-demo-connect">${ic('cal')}Connect (simulated)</button>`}</div>`;
+}
+const customRow = (c = {}) => `<div class="link-row custom-row"><input class="input" data-cl value="${esc(c.label || '')}" placeholder="Label, e.g. Instagram" aria-label="Link label">
+  <input class="input" data-cu type="url" value="${esc(c.url || '')}" placeholder="https://…" aria-label="Link address"><button type="button" class="btn btn-ghost sm icon-btn" data-act="link-row-del" aria-label="Remove link">${ic('x')}</button></div>`;
+function vAdminLinks() {
+  const l = links(), people = [...(adminData.members || state.members)].filter(m => m.active !== false).sort((a, b) => a.name.localeCompare(b.name));
+  const linkField = (name, label, value, ph, hint) => `<div class="link-row"><label for="lk-${name}">${label}${hint ? `<span class="faint">${hint}</span>` : ''}</label><input class="input" id="lk-${name}" name="${name}" type="url" value="${esc(value || '')}" placeholder="${ph}"></div>`;
+  return `<div class="page">
+    ${heading('Admin', 'Every outside link Rocket uses, in one place. Changes show up for members straight away.')}${adminTabs()}
+    <section class="panel"><div class="panel-head"><h2>Google Calendar</h2><span class="faint" style="font-size:12.5px">Real invites for meetings</span></div>
+      <div class="links-body">${calendarCard()}</div></section>
+    <form data-form="links" novalidate class="stackcol">
+      <section class="panel"><div class="panel-head"><h2>WhatsApp groups</h2><span class="faint" style="font-size:12.5px">Group invite links (WhatsApp → group → Invite via link)</span></div>
+        <div class="links-body">${linkField('wa_all', 'All members', l.whatsapp.all, 'https://chat.whatsapp.com/…', ' · shown to everyone')}
+          ${TEAMS.map(tm => linkField('wa_' + tm.id, `${esc(tm.name)} team`, l.whatsapp[tm.id], 'https://chat.whatsapp.com/…', ` · ${teamMembers(tm.id).length} ${teamMembers(tm.id).length === 1 ? 'person' : 'people'}`)).join('')}</div></section>
+      <section class="panel"><div class="panel-head"><h2>Members’ WhatsApp numbers</h2><span class="faint" style="font-size:12.5px">For “Message on WhatsApp” · visible to signed-in members</span></div>
+        <div class="links-body">${people.map(m => `<div class="link-row"><label for="num-${m.id}"><span class="who">${avatar(m.id)}<span>${esc(m.name)}</span></span><span class="faint">${esc(roleLabel(m.role))}</span></label><input class="input" id="num-${m.id}" name="num_${m.id}" type="tel" inputmode="tel" value="${esc(m.whatsapp || '')}" placeholder="+971 50 123 4567"></div>`).join('')}</div></section>
+      <section class="panel"><div class="panel-head"><h2>Club resources</h2></div>
+        <div class="links-body">${linkField('drive_url', 'Design Drive', state.settings.designDriveUrl, 'https://drive.google.com/drive/folders/…', ' · shown to PR, Media, Graphic Design and leadership')}
+          ${linkField('cal_url', 'Club calendar (view link)', l.calendarUrl, 'https://calendar.google.com/calendar/…', ' · optional, for members to open or subscribe')}</div></section>
+      <section class="panel"><div class="panel-head"><h2>Other links</h2><span class="faint" style="font-size:12.5px">Shown to everyone under “Club links” on the Overview</span></div>
+        <div class="links-body"><div id="custom-links">${l.custom.map(customRow).join('')}${l.custom.length ? '' : customRow()}</div>
+          <div><button type="button" class="btn sm" data-act="link-row-add">${ic('plus')}Add a link</button></div></div></section>
+      <div class="links-save"><span class="err" id="lkerr" role="alert"></span><button class="btn btn-primary">Save links</button></div>
+    </form>
+  </div>`;
 }

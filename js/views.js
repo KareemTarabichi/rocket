@@ -98,12 +98,24 @@ function vOverview() {
             <span class="why">${esc(relevantEvent(next).join(' · '))}</span>${progressBlock(next)}</div>` : '<div class="empty">No upcoming events involve you.</div>'}</section>
         <section class="panel"><div class="panel-head"><h2>Active ideas</h2><a href="#" data-act="sum-ideas">Board</a></div>
           <ul class="rows">${ideas.slice(0, 4).map(i => `<li class="row" data-act="open-idea" data-id="${i.id}"><div class="row-main"><div class="row-title">${esc(i.title)}</div><div class="row-sub">${esc(i.next || 'No next step yet')}</div></div>${ideaBadge(i.stage)}</li>`).join('') || '<li class="empty">No active ideas involve you.</li>'}</ul></section>
+        ${clubLinksPanel()}
         <section class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="quick">
           ${ea() ? `<button class="btn btn-primary" data-act="new-meeting">${ic('cal')}Schedule meeting</button>` : ''}
           <button class="btn" data-act="new-idea">${ic('bulb')}Submit idea</button><button class="btn" data-act="new-task">${ic('flag')}Add follow-up</button><button class="btn" data-act="go" data-v="kb">${ic('book')}${esc(roleLabel(state.role))} guidance</button>${canSeeDrive() ? driveBtn() : ''}</div></section>
       </div>
     </div>
   </div>`;
+}
+
+function clubLinksPanel() {
+  const l = links(), items = [
+    ...(l.whatsapp.all ? [`<a class="btn btn-wa" href="${esc(l.whatsapp.all)}" target="_blank" rel="noopener noreferrer">${ic('wa')}All-members WhatsApp</a>`] : []),
+    ...(l.whatsapp[me().team] ? [`<a class="btn btn-wa" href="${esc(l.whatsapp[me().team])}" target="_blank" rel="noopener noreferrer">${ic('wa')}${esc(teamName(me().team))} group</a>`] : []),
+    ...(l.calendarUrl ? [`<a class="btn" href="${esc(l.calendarUrl)}" target="_blank" rel="noopener noreferrer">${ic('cal')}Club calendar</a>`] : []),
+    ...l.custom.filter(c => c.url).map(c => `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">${ic('link')}${esc(c.label || c.url)}</a>`)];
+  if (!items.length && !isAdmin()) return '';
+  return `<section class="panel"><div class="panel-head"><h2>Club links</h2>${isAdmin() ? '<a href="#" data-act="admin-links">Manage</a>' : ''}</div>
+    <div class="quick">${items.join('') || '<span class="faint" style="font-size:13px">No links yet. Add WhatsApp groups, the club calendar and other links in Admin → Links.</span>'}</div></section>`;
 }
 
 /* ================= meetings ================= */
@@ -116,18 +128,19 @@ function meetingRow(m) {
   </div>`;
 }
 function calendarPanel(cal, list) {
-  if (!LIVE) return `${cal.connected ? `<div style="font-size:13.5px">Invites are mirrored to <span class="mono">${esc(cal.email)}</span>.</div>` : '<div class="muted" style="font-size:13.5px">When connected, invitations and cancellations are also marked as sent to Google Calendar.</div>'}
+  const openLink = links().calendarUrl ? `<div><a class="btn sm" href="${esc(links().calendarUrl)}" target="_blank" rel="noopener noreferrer">${ic('cal')}Open the club calendar${ic('ext')}</a></div>` : '';
+  if (!LIVE) return openLink + `${cal.connected ? `<div style="font-size:13.5px">Invites are mirrored to <span class="mono">${esc(cal.email)}</span>.</div>` : '<div class="muted" style="font-size:13.5px">When connected, invitations and cancellations are also marked as sent to Google Calendar.</div>'}
     ${ea() ? (cal.connected ? `<div><button class="btn sm" data-act="cal-disconnect">Disconnect</button></div>`
       : `<form data-form="calendar" style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" type="email" name="email" required placeholder="launchpad.club@gmail.com" aria-label="Calendar email" style="flex:1;min-width:180px"><button class="btn sm">Connect</button></form>`)
       : '<span class="faint" style="font-size:12.5px">Managed by the Executive Assistant.</span>'}
     <span class="muted-note">Demo — the live app connects to Google for real.</span>`;
-  const missing = upcomingMeetings().filter(m => !m.onCalendar).length;
+  const missing = upcomingMeetings().filter(m => !m.onCalendar).length, manage = ea() || isAdmin();
+  const open = links().calendarUrl ? `<a class="btn sm" href="${esc(links().calendarUrl)}" target="_blank" rel="noopener noreferrer">${ic('cal')}Open the club calendar${ic('ext')}</a>` : '';
   if (cal.connected) return `<div style="font-size:13.5px">Meetings are created on <span class="mono">${esc(cal.email)}</span>’s calendar, and Google emails each attendee an invite. Changes and cancellations update it too.</div>
-    ${ea() ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${missing ? `<button class="btn sm btn-primary" data-act="cal-sync-all">Add ${missing} upcoming meeting${missing === 1 ? '' : 's'} to the calendar</button>` : ''}<button class="btn sm" data-act="cal-disconnect">Disconnect</button></div>` : ''}`;
-  return ea() ? `<div class="muted" style="font-size:13.5px">Connect the club’s Google account. Every meeting you schedule then becomes a calendar event with real invites to the attendees’ AUS email.</div>
-      <div><button class="btn btn-primary sm" data-act="cal-connect">${ic('cal')}Connect Google Calendar</button></div>
-      <span class="muted-note">Use a shared Launchpad account rather than your personal one, so it survives handovers.</span>`
-    : '<span class="faint" style="font-size:12.5px">Not connected yet. The Executive Assistant connects it.</span>';
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${open}${manage && missing ? `<button class="btn sm btn-primary" data-act="cal-sync-all">Add ${missing} upcoming meeting${missing === 1 ? '' : 's'} to the calendar</button>` : ''}${isAdmin() ? `<button class="btn sm btn-ghost" data-act="admin-links">Manage in Admin</button>` : ''}</div>`;
+  return manage ? `<div class="muted" style="font-size:13.5px">Not connected yet. Connect the club’s Google account and every meeting the Executive Assistant schedules becomes a calendar event with real invites.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${isAdmin() ? `<button class="btn btn-primary sm" data-act="admin-links">Set up in Admin → Links</button>` : `<button class="btn btn-primary sm" data-act="cal-connect">${ic('cal')}Connect Google Calendar</button>`}${open}</div>`
+    : `<span class="faint" style="font-size:12.5px">Not connected yet — an admin sets it up.</span>${open ? `<div>${open}</div>` : ''}`;
 }
 function vMeetings() {
   const list = filters.meetings === 'upcoming' ? upcomingMeetings() : visibleMeetings(), notes = visibleNotifications();

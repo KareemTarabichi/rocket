@@ -11,7 +11,7 @@ let syncChain = Promise.resolve();
 
 const t5 = t => (t || '').slice(0, 5);
 const COLLECTIONS = [
-  {key:'profiles', table:'profiles', mode:'update', get:() => state.members, to:m => ({id:m.id, responsibility:m.responsibility})},
+  {key:'profiles', table:'profiles', mode:'update', get:() => state.members, to:m => ({id:m.id, responsibility:m.responsibility, whatsapp:m.whatsapp || ''})},
   {key:'budget', table:'budget_settings', single:true, to:() => ({id:1, overall:+state.budget.overall || 0, allocations:state.budget.allocations})},
   {key:'meetings', table:'meetings', get:() => state.meetings, to:m => ({id:m.id, title:m.title, date:m.date, start_time:m.start, end_time:m.end, location:m.location, agenda:m.agenda, mode:m.mode, team_ids:m.teamIds, attendee_ids:m.attendees})},
   {key:'notifications', table:'notifications', mode:'insert', get:() => state.notifications, to:n => ({id:n.id, kind:n.kind, title:n.title, details:n.details, recipient_ids:n.recipients, calendar:!!n.calendar})},
@@ -22,7 +22,7 @@ const COLLECTIONS = [
   {key:'designs', table:'designs', mode:'upsert-no-delete', get:() => state.designs, to:d => ({id:d.id, title:d.title, event_id:d.event || null, campaign:d.campaign || '', brief:d.brief, deliverables:d.deliverables || '', owner:d.owner || null, due:d.due, status:d.status, previous_status:d.previousStatus || null})},
   {key:'startups', table:'startups', get:() => state.startups, to:s => ({id:s.id, name:s.name, sector:s.sector || '', notes:s.notes || '', attendance:s.attendance, contacts:s.contacts, rating:s.rating ?? null,
     deletion_requested_by:s.deletion?.by || null, deletion_requested_at:s.deletion?.at || null, deletion_reason:s.deletion?.reason || ''})},
-  {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || ''})},
+  {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || '', links:state.settings.links || {}})},
   {key:'kb', table:'kb_articles', get:() => state.kb, to:a => ({id:a.id, title:a.title, category:a.category, roles:a.roles, summary:a.summary || '', body:a.body, updated_by:a.updatedBy || null, updated_at:a.updatedAt})},
   {key:'expenses', table:'expenses', mode:'upsert-no-delete', get:() => state.budget.expenses, to:e => ({id:e.id, name:e.name, event_id:e.event || null, planned:+e.planned || 0, actual:+e.actual || 0, receipt:e.receipt || ''})},
   {key:'reimbursements', table:'reimbursements', mode:'upsert-no-delete', get:() => state.budget.reimbursements, to:r => ({id:r.id, name:r.name, member:r.member || null, event_id:r.event || null, amount:+r.amount || 0, status:r.status, receipt:r.receipt || ''})},
@@ -42,7 +42,7 @@ async function buildState(userId) {
     q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle()]);
   const bad = res.find(r => r.error); if (bad) throw bad.error;
   const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st] = res.map(r => r.data);
-  const members = p.map(x => ({id:x.id, name:x.name, role:x.role, team:x.team, email:x.email, responsibility:x.responsibility, is_admin:x.is_admin, active:x.active}));
+  const members = p.map(x => ({id:x.id, name:x.name, role:x.role, team:x.team, email:x.email, responsibility:x.responsibility, is_admin:x.is_admin, active:x.active, whatsapp:x.whatsapp || ''}));
   const mine = members.find(x => x.id === userId);
   if (!mine || !mine.active) return null;
   return {
@@ -58,7 +58,7 @@ async function buildState(userId) {
     startups:s.map(x => ({id:x.id, name:x.name, sector:x.sector, notes:x.notes, attendance:x.attendance || [], contacts:x.contacts || [], rating:x.rating == null ? null : +x.rating,
       deletion:x.deletion_requested_at ? {by:x.deletion_requested_by, at:x.deletion_requested_at, reason:x.deletion_reason || ''} : null})),
     kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
-    settings:{designDriveUrl:st?.design_drive_url || ''},
+    settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}},
     budget:{overall:+(bs?.overall || 0), allocations:bs?.allocations || {},
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),
       reimbursements:rb.map(x => ({id:x.id, name:x.name, member:x.member, event:x.event_id || '', amount:+x.amount, status:x.status, receipt:x.receipt}))},
@@ -71,7 +71,7 @@ async function reloadLive() {
   if (!session) return showLogin();
   const next = await buildState(session.user.id);
   if (!next) return lockedOut();
-  state = next; takeSnapshot();
+  state = next; ensureLinks(); takeSnapshot();
   if (!access(view)) view = 'overview';
   render();
 }
@@ -231,7 +231,7 @@ async function enterApp(session) {
   try {
     const next = await buildState(session.user.id);
     if (!next) return lockedOut();
-    state = next; takeSnapshot();
+    state = next; ensureLinks(); takeSnapshot();
     if (!session.user.user_metadata?.password_set) return showSetPassword();
     openApp();
   } catch (e) { showLogin(`<span class="err">Couldn’t load Rocket: ${esc(e.message)}</span>`); }
@@ -249,7 +249,9 @@ async function uploadKbImage(file) {
 // Calls one of Rocket's Edge Functions as the signed-in member and surfaces its error message.
 async function fnApi(fn, action, payload = {}) {
   const {data, error} = await sb.functions.invoke(fn, {body:{action, ...payload, redirectTo:location.origin + location.pathname}});
-  if (error) { let msg = error.message; try { msg = (await error.context.json()).error || msg; } catch (e) {} throw new Error(msg); }
+  if (error) { let msg = error.message, body = null; try { body = await error.context.json(); msg = body.error || msg; } catch (e) {}
+    if (error.context?.status === 404 && !body?.error) msg = 'NOT_DEPLOYED: this server function isn’t deployed yet';
+    throw new Error(msg); }
   return data;
 }
 const adminApi = (action, payload) => fnApi('admin-users', action, payload);

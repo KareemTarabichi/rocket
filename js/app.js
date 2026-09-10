@@ -500,13 +500,22 @@ const ACT = {
   'edit-alloc': () => openAlloc(), 'new-expense': () => { if (access('budget')) openExpense(null); }, 'edit-expense': el => openExpense(el.dataset.id), 'new-reimb': () => openReimb(null), 'edit-reimb': el => openReimb(el.dataset.id),
   'edit-member': el => openMember(el.dataset.id), 'open-kb': el => openKB(el.dataset.id),
   'del-cancel': () => cancelDeletion(), 'del-confirm': () => confirmDeletion(),
-  'cal-disconnect': async () => { if (!ea()) return;
-    if (!LIVE) { state.calendar = {connected:false, email:''}; return finish('Google Calendar disconnected', 'simulated'); }
-    try { await calendarApi('disconnect'); await reloadLive(); toast('Google Calendar disconnected', 'new meetings won’t send invites'); } catch (e) { toast(e.message, '', true); } },
-  'cal-connect': async el => { if (!ea() || !LIVE) return; el.disabled = true; el.textContent = 'Opening Google…';
+  'cal-disconnect': async () => { if (!ea() && !isAdmin()) return;
+    if (!LIVE) { state.calendar = {connected:false, email:''}; adminData.calendar = null; return finish('Google Calendar disconnected', 'simulated'); }
+    try { await calendarApi('disconnect'); adminData.calendar = null; await reloadLive(); toast('Google Calendar disconnected', 'new meetings won’t send invites'); } catch (e) { toast(e.message, '', true); } },
+  'cal-demo-connect': () => { if (LIVE || !isAdmin()) return; state.calendar = {connected:true, email:'launchpad.club@gmail.com'}; adminData.calendar = null; finish('Google Calendar connected', 'simulated in the demo'); },
+  'cal-status': () => { adminData.calendar = null; render(); },
+  'cal-connect': async el => { if ((!ea() && !isAdmin()) || !LIVE) return; el.disabled = true; el.textContent = 'Opening Google…';
     try { const {url} = await calendarApi('auth-url'); location.href = url; } catch (e) { el.disabled = false; el.textContent = 'Connect Google Calendar'; toast('Couldn’t start the Google sign-in: ' + e.message, '', true); } },
-  'cal-sync-all': async el => { if (!ea() || !LIVE) return; el.disabled = true; el.textContent = 'Adding…';
+  'cal-sync-all': async el => { if ((!ea() && !isAdmin()) || !LIVE) return; el.disabled = true; el.textContent = 'Adding…';
     try { const r = await calendarApi('sync-all'); await reloadLive(); toast(`Added ${r.synced} upcoming meeting${r.synced === 1 ? '' : 's'} to Google Calendar`, r.failed ? `${r.failed} failed` : 'invites sent'); } catch (e) { toast(e.message, '', true); el.disabled = false; } },
+  'admin-tab': el => { adminTab = el.dataset.v; if (adminTab === 'links') adminData.calendar = null; render(); },
+  'admin-links': () => { adminTab = 'links'; adminData.calendar = null; go('admin'); },
+  'link-row-add': () => { $('#custom-links').insertAdjacentHTML('beforeend', customRow()); $('#custom-links .custom-row:last-child [data-cl]').focus(); },
+  'link-row-del': el => { el.closest('.custom-row').remove(); },
+  'wa-missing': el => { const team = el.dataset.kind !== 'person', who = team ? (el.dataset.kind === 'all' ? 'the all-members group' : `the ${teamName(el.dataset.id)} group`) : member(el.dataset.id)?.name.split(' ')[0];
+    if (isAdmin()) { adminTab = 'links'; adminData.calendar = null; go('admin'); toast(`Add ${team ? `a WhatsApp link for ${who}` : `${who}’s WhatsApp number`} here`); }
+    else toast(`No WhatsApp ${team ? 'link' : 'number'} for ${who} yet — ask an admin to add it`, '', true); },
   'push-on': async () => { await enablePush(); renderPushRow(); if (welcome) renderWelcomePush(); },
   'push-off': async () => { await disablePush(); renderPushRow(); },
   'push-test': () => fnApi('push', 'test').then(r => toast(r.sent ? 'Test notification sent' : 'No devices to send to', r.sent ? 'check this device' : '')).catch(e => toast(e.message, '', true)),
@@ -526,6 +535,7 @@ const ACT = {
     toast(isTeam ? `Opening the ${t.name} WhatsApp group` : `Opening WhatsApp chat with ${t.name.split(' ')[0]}`, isTeam ? t.wa + ' (demo)' : 'wa.me link (demo)'); },
 };
 document.addEventListener('click', e => {
+  const link = e.target.closest('a[href]'); if (link && !link.dataset.act && link.getAttribute('href') !== '#') return; // real links just open
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
   const ctl = e.target.closest('select, input, textarea, label');
   if (ctl && ctl !== el && el.contains(ctl)) return; // interacting with a control inside a clickable card
@@ -696,7 +706,28 @@ const FORMS = {
     const list = adminData.members || state.members, t = list.find(x => x.id === f.dataset.id);
     const p = {id:f.dataset.id, name:String(fd.get('name')).trim(), role:fd.get('role'), team:fd.get('team'), is_admin: f.querySelector('[name=is_admin]').disabled ? true : !!fd.get('is_admin')};
     if (!p.name) { $('#aerr').textContent = 'Add their name.'; return; }
-    runAdmin('update', p, `Saved ${p.name}`, t && t.role !== p.role ? `${roleLabel(t.role)} → ${roleLabel(p.role)}` : '');
+    const wa = String(fd.get('whatsapp') || '').trim();
+    if (wa && !/^\+?[0-9 ()-]{7,24}$/.test(wa)) { $('#aerr').textContent = 'Use a phone number like +971 50 123 4567.'; return; }
+    const m = member(p.id); if (m && (m.whatsapp || '') !== wa) { m.whatsapp = wa; if (t) t.whatsapp = wa; save(); }
+    (LIVE ? syncChain : Promise.resolve()).then(() => runAdmin('update', p, `Saved ${p.name}`, t && t.role !== p.role ? `${roleLabel(t.role)} → ${roleLabel(p.role)}` : ''));
+  },
+  links(f, fd) {
+    if (!isAdmin()) return;
+    const err = $('#lkerr'), bad = [], url = (v, label) => { v = String(v || '').trim(); if (v && !/^https:\/\/\S+$/i.test(v)) bad.push(label); return v; };
+    const wa = {all:url(fd.get('wa_all'), 'All-members WhatsApp')};
+    TEAMS.forEach(tm => { const v = url(fd.get('wa_' + tm.id), `${tm.name} WhatsApp`); if (v) wa[tm.id] = v; });
+    if (!wa.all) delete wa.all;
+    const drive = url(fd.get('drive_url'), 'Design Drive'), cal = url(fd.get('cal_url'), 'Club calendar');
+    const custom = [...f.querySelectorAll('.custom-row')].map(r => ({label:r.querySelector('[data-cl]').value.trim(), url:url(r.querySelector('[data-cu]').value, r.querySelector('[data-cl]').value.trim() || 'Other link')}))
+      .filter(c => c.url).map((c, i) => ({id:'l' + i, label:c.label || c.url.replace(/^https:\/\//, '').split('/')[0], url:c.url}));
+    const numbers = [], badNums = [];
+    (adminData.members || state.members).forEach(m => { const v = fd.get('num_' + m.id); if (v === null) return; const n = String(v).trim();
+      if (n && !/^\+?[0-9 ()-]{7,24}$/.test(n)) badNums.push(m.name); else numbers.push([m.id, n]); });
+    if (bad.length || badNums.length) { err.textContent = [bad.length ? `Use a full https:// link for: ${bad.join(', ')}.` : '', badNums.length ? `Check the WhatsApp number for: ${badNums.join(', ')}.` : ''].join(' '); return; }
+    state.settings.designDriveUrl = drive;
+    state.settings.links = {whatsapp:wa, calendarUrl:cal, custom};
+    numbers.forEach(([id, n]) => { const m = member(id); if (m) m.whatsapp = n; const a = adminData.members?.find(x => x.id === id); if (a) a.whatsapp = n; });
+    save(); render(); toast('Links saved', 'members see them straight away');
   },
 };
 document.addEventListener('submit', e => {

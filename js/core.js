@@ -185,7 +185,7 @@ function seed() {
     {id:uid('n'), kind:'invite', title:'Meeting invitation: All-members monthly', details:`${fmtDate(D(6))} · 5:30 PM–6:30 PM · Main Plaza auditorium`, recipients:members.map(m => m.id), at:new Date(Date.now() - 864e5).toISOString(), calendar:false}];
 
   return {version:2, role:'ea', meId:'m4', members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, kb,
-    settings:{designDriveUrl:''}, calendar:{connected:false, email:''}};
+    settings:{designDriveUrl:'', links:emptyLinks()}, calendar:{connected:false, email:''}};
 }
 
 /* ================= state & persistence ================= */
@@ -195,6 +195,7 @@ let state = null;   // live mode: filled from Supabase after sign-in
 function initDemoState() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
+  ensureLinks();
 }
 let view = 'overview';
 let draft = null;          // record being edited in the open dialog
@@ -212,6 +213,24 @@ function save() {
 }
 function upsert(list, rec) { const i = list.findIndex(x => x.id === rec.id); if (i >= 0) list[i] = rec; else list.push(rec); return rec; }
 function finish(msg, sub) { save(); closeDialog(); render(); if (msg) toast(msg, sub); }
+
+/* ================= links (admin-managed) ================= */
+// state.settings.links = {whatsapp:{all, <team id>…}, calendarUrl, custom:[{id, label, url}]}
+const emptyLinks = () => ({whatsapp:{}, calendarUrl:'', custom:[]});
+function ensureLinks() {
+  if (!state) return;
+  state.settings ||= {designDriveUrl:''};
+  const l = state.settings.links || {};
+  state.settings.links = {whatsapp:l.whatsapp || {}, calendarUrl:l.calendarUrl || '', custom:Array.isArray(l.custom) ? l.custom : []};
+}
+const links = () => state.settings?.links || emptyLinks();
+const waDigits = phone => String(phone || '').replace(/\D/g, '');
+// WhatsApp target for a team group, the club-wide group ('all'), or a member's own number.
+function waHref(kind, id) {
+  if (kind === 'team' || kind === 'all') return links().whatsapp[kind === 'all' ? 'all' : id] || '';
+  const d = waDigits(member(id)?.whatsapp);
+  return d.length >= 7 ? `https://wa.me/${d}` : '';
+}
 
 /* ================= identity & permissions ================= */
 const me = () => state.members.find(m => m.id === state.meId) || state.members.find(m => m.role === state.role);

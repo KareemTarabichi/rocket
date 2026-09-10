@@ -39,7 +39,7 @@ You need free accounts on **Supabase** and **Vercel** (and optionally GitHub). R
 
 1. In Supabase, create a new project. Pick the region closest to the UAE that's offered, and save the database password somewhere safe.
 2. Open **SQL Editor → New query**, paste the whole of `supabase/migrations/20260910000000_init.sql`, and run it.
-3. New query: paste `supabase/migrations/20260911000000_kb_settings_startup_approval.sql` and run it. Then do the same with `supabase/migrations/20260912000000_calendar_and_push.sql` (Google Calendar and phone notifications). This adds the editable knowledge base (with 12 starter articles), the Design Drive setting, image uploads for articles, and approval-gated startup deletion.
+3. New query: paste `supabase/migrations/20260911000000_kb_settings_startup_approval.sql` and run it. Then do the same with `supabase/migrations/20260912000000_calendar_and_push.sql` (Google Calendar and phone notifications). Then `supabase/migrations/20260913000000_links.sql` (admin-managed links and WhatsApp numbers). This adds the editable knowledge base (with 12 starter articles), the Design Drive setting, image uploads for articles, and approval-gated startup deletion.
 4. New query: paste `supabase/import_startups.sql` and run it. The Startup Directory now has your 56 startups.
 
 ### 2. Lock down sign-in
@@ -123,7 +123,12 @@ Later, if you connect your own email sender (Authentication → Emails → SMTP)
 - **Remove** a member (with confirmation). Their account is deleted; anything they owned becomes unassigned.
 - See every admin action in the **Admin activity** log.
 - **Write the knowledge base**: add, edit and delete articles with headings, lists, links and images (Knowledge Base → New article).
-- **Set the Design Drive link** (Admin → Links). PR, Media, Graphic Design and leadership get a Design Drive button.
+- **Manage every link in Admin → Links**:
+  - **Google Calendar**: connection status, setup steps if it isn't configured yet, Connect / Disconnect, and "Add upcoming meetings". Admins and the Executive Assistant can manage the connection; only the Executive Assistant's meetings send invites.
+  - **WhatsApp groups**: an invite link for the all-members group and each team. Team buttons in Members & teams and the Overview open them.
+  - **Members' WhatsApp numbers**: power "Message on WhatsApp" (also editable on each member in Admin).
+  - **Design Drive** (shown to PR, Media, Graphic Design and leadership) and an optional **club calendar view link**.
+  - **Other links** (Instagram, forms, anything): shown to everyone under "Club links" on the Overview.
 - **Approve startup deletions**. Anyone with the directory can ask to delete a startup; only an admin or the President can approve (it then disappears for everyone) or keep it.
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.

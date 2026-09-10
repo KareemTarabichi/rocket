@@ -84,10 +84,13 @@ function vDesign() {
 }
 
 /* ================= members & teams ================= */
-const waBtn = (kind, id, label, sm) => `<button class="btn btn-wa ${sm ? 'sm' : ''} ${label ? '' : 'icon-btn'}" data-act="wa" data-kind="${kind}" data-id="${id}" aria-label="Chat on WhatsApp" title="Chat on WhatsApp">${ic('wa')}${label || ''}</button>`;
+// Opens the real WhatsApp group or chat when an admin has added it; otherwise explains how to add it.
+const waBtn = (kind, id, label, sm) => { const href = waHref(kind, id), cls = `btn btn-wa ${sm ? 'sm' : ''} ${label ? '' : 'icon-btn'}`;
+  return href ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" title="Chat on WhatsApp">${ic('wa')}${label || ''}</a>`
+    : `<button type="button" class="${cls}" data-act="wa-missing" data-kind="${kind}" data-id="${id}" aria-label="WhatsApp link not added yet" title="Not added yet" style="opacity:.55">${ic('wa')}${label || ''}</button>`; };
 function vMembers() {
   return `<div class="page">
-    ${heading('Members & teams', 'Who’s on each team and what they’re responsible for. Leadership edits responsibilities; admins add and remove members and change roles in Admin.', isAdmin() ? `<button class="btn" data-act="go" data-v="admin">${ic('shield')}Manage members</button>` : '')}
+    ${heading('Members & teams', 'Who’s on each team and what they’re responsible for. Leadership edits responsibilities; admins add and remove members and change roles in Admin.', `${waHref('all') ? waBtn('all', 'all', 'All-members group') : ''}${isAdmin() ? `<button class="btn" data-act="go" data-v="admin">${ic('shield')}Manage members</button>` : ''}`)}
     <div class="teams">${TEAMS.map(t => { const ms = teamMembers(t.id);
       return `<section class="team"><div style="display:flex;justify-content:space-between;gap:10px"><h3>${esc(t.name)}</h3><span class="num faint" style="font-size:12px">${ms.length} ${ms.length === 1 ? 'person' : 'people'}</span></div><p>${esc(t.desc)}</p>
         <div class="team-foot"><span class="stack">${ms.map(id => avatar(id)).join('')}</span>${waBtn('team', t.id, 'Chat on WhatsApp', true)}</div></section>`; }).join('')}</div>
