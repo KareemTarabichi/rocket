@@ -112,40 +112,91 @@ async function syncFailed(error) {
 }
 
 /* ---- auth ---- */
+// Sign-in: email + password everywhere (it works inside the home-screen app, where emailed links
+// can't reach). First-timers and anyone who forgot their password use an emailed link, then set one.
 function showLogin(msg = '') {
   state = null; document.body.classList.add('is-login');
   if (dlg().open) dlg().close();
+  const inApp = typeof isStandalone === 'function' && isStandalone();
   $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
     <form class="login-card" data-form="login" novalidate>
       ${BRAND}
-      <div><h1>Sign in to Rocket</h1><p style="margin-top:6px">The ops hub for AUS Launchpad. We’ll email you a one-tap sign-in link — no password.</p></div>
-      <div class="field"><label for="l-email">AUS email</label><input class="input" id="l-email" name="email" type="email" autocomplete="email" placeholder="g000xxxxx@aus.edu" required></div>
+      <div><h1>Sign in to Rocket</h1><p style="margin-top:6px">The ops hub for AUS Launchpad.</p></div>
+      <div class="field"><label for="l-email">AUS email</label><input class="input" id="l-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="g000xxxxx@aus.edu" required></div>
+      <div class="field"><label for="l-pass">Password</label><input class="input" id="l-pass" name="password" type="password" autocomplete="current-password" required></div>
       <div id="l-msg" role="status">${msg}</div>
-      <button class="btn btn-primary" style="justify-content:center">Email me a sign-in link</button>
-      <span class="faint" style="font-size:12px">Only members an admin has invited can sign in.</span>
+      <button class="btn btn-primary" style="justify-content:center">Sign in</button>
+      <div class="login-alt">
+        <span>First time here, or forgot your password?</span>
+        <button type="button" class="btn" data-act="login-link" style="justify-content:center">Email me a sign-in link</button>
+        ${inApp ? '<span class="faint" style="font-size:12px">The link opens in your browser. Set your password there, then come back to this app and sign in.</span>' : '<span class="faint" style="font-size:12px">You’ll set a password after the link signs you in. Only members an admin has invited can sign in.</span>'}
+      </div>
     </form></div>`;
 }
 function lockedOut() {
   sb.auth.signOut();
   showLogin('<span class="err">Your Rocket access is turned off. Ask an admin if you think that’s a mistake.</span>');
 }
-async function sendLoginLink(email) {
+const loginEmail = () => ($('#l-email')?.value || '').trim().toLowerCase();
+async function passwordSignIn(email, password) {
   const out = $('#l-msg');
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@aus\.edu$/.test(email)) { out.innerHTML = '<span class="err">Use your @aus.edu address.</span>'; return; }
+  if (!password) { out.innerHTML = '<span class="err">Enter your password — or use the sign-in link below if you haven’t set one yet.</span>'; return; }
+  out.innerHTML = '<span class="faint">Signing in…</span>';
+  const {error} = await sb.auth.signInWithPassword({email, password});
+  if (error) out.innerHTML = `<span class="err">${/invalid|credentials/i.test(error.message) ? 'Wrong email or password. If you haven’t set a password yet, use “Email me a sign-in link”.' : esc(error.message)}</span>`;
+  // success is picked up by onAuthStateChange → enterApp
+}
+async function sendLoginLink(email) {
+  const out = $('#l-msg');
+  email = (email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@aus\.edu$/.test(email)) { out.innerHTML = '<span class="err">Type your @aus.edu address above first.</span>'; $('#l-email')?.focus(); return; }
   out.innerHTML = '<span class="faint">Sending…</span>';
-  const {error} = await sb.auth.signInWithOtp({email, options:{shouldCreateUser:false, emailRedirectTo:location.origin + location.pathname}});
-  if (error) { out.innerHTML = `<span class="err">${/signup|not allowed|not found/i.test(error.message) ? 'That email isn’t on Rocket yet. Ask an admin to invite you.' : esc(error.message)}</span>`; return; }
-  out.innerHTML = `<div class="callout cyan">${ic('info')}<div>Check <b>${esc(email)}</b> for your sign-in link. You can close this tab.</div></div>`;
+  const {error} = await sb.auth.signInWithOtp({email, options:{shouldCreateUser:false, emailRedirectTo:location.origin + '/'}});
+  if (error) { out.innerHTML = `<span class="err">${/signup|not allowed|not found/i.test(error.message) ? 'That email isn’t on Rocket yet. Ask an admin to invite you.' : /rate limit/i.test(error.message) ? 'Too many emails were sent just now. Try again in a little while.' : esc(error.message)}</span>`; return; }
+  out.innerHTML = `<div class="callout cyan">${ic('info')}<div>Check <b>${esc(email)}</b> and tap the link. It signs you in and asks you to set a password.</div></div>`;
+}
+
+// Shown after a link sign-in until the member has a password.
+function showSetPassword(msg = '') {
+  document.body.classList.add('is-login');
+  $('#login').innerHTML = `<div class="login"><div class="thermal"></div><div class="grain"></div>
+    <form class="login-card" data-form="set-password" novalidate>
+      ${BRAND}
+      <div><h1>Set your password</h1><p style="margin-top:6px">You’re signed in as <b>${esc(me().email)}</b>. Choose a password to sign in with from now on — including in the Rocket app on your phone’s home screen.</p></div>
+      <input type="email" name="username" value="${esc(me().email)}" autocomplete="username" hidden>
+      <div class="field"><label for="p-new">New password</label><input class="input" id="p-new" name="password" type="password" autocomplete="new-password" minlength="8" required></div>
+      <div class="field"><label for="p-again">Type it again</label><input class="input" id="p-again" name="again" type="password" autocomplete="new-password" minlength="8" required></div>
+      <span class="faint" style="font-size:12px">At least 8 characters. Your browser or password manager can suggest a strong one.</span>
+      <div id="p-msg" role="status">${msg}</div>
+      <button class="btn btn-primary" style="justify-content:center">Save password and continue</button>
+    </form></div>`;
+  setTimeout(() => $('#p-new')?.focus());
+}
+async function savePassword(password, again, out) {
+  if (password.length < 8) { out.innerHTML = '<span class="err">Use at least 8 characters.</span>'; return false; }
+  if (password !== again) { out.innerHTML = '<span class="err">The two passwords don’t match.</span>'; return false; }
+  out.innerHTML = '<span class="faint">Saving…</span>';
+  const {error} = await sb.auth.updateUser({password, data:{password_set:true}});
+  if (error) { out.innerHTML = `<span class="err">${/different/i.test(error.message) ? 'That’s your current password — pick a new one.'
+    : /weak|short|characters/i.test(error.message) ? 'That password is too weak. Try a longer one.'
+    : /reauth|recent/i.test(error.message) ? 'For security, sign out, sign back in with “Email me a sign-in link”, then change your password.'
+    : esc(error.message)}</span>`; return false; }
+  return true;
+}
+function openApp() {
+  document.body.classList.remove('is-login'); $('#login').innerHTML = '';
+  view = 'overview'; render();
+  handleLaunchParams(); maybeShowWelcome();
 }
 async function enterApp(session) {
   try {
     const next = await buildState(session.user.id);
     if (!next) return lockedOut();
     state = next; takeSnapshot();
-    document.body.classList.remove('is-login'); $('#login').innerHTML = '';
-    view = 'overview'; render();
-    handleLaunchParams(); maybeShowWelcome();
+    if (!session.user.user_metadata?.password_set) return showSetPassword();
+    openApp();
   } catch (e) { showLogin(`<span class="err">Couldn’t load Rocket: ${esc(e.message)}</span>`); }
 }
 async function signOut() { await disablePush(true); await sb.auth.signOut(); closeWelcome(false); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }

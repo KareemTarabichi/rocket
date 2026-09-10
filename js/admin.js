@@ -88,7 +88,7 @@ function openAdminEdit(id) {
             : `<button type="button" class="btn sm" data-act="admin-disable" data-id="${m.id}" ${self || lastAdmin ? `disabled title="${self ? 'You can’t disable your own login' : 'Rocket needs at least one active admin'}"` : ''}>Disable login</button>`}
           ${st !== 'disabled' ? `<button type="button" class="btn sm" data-act="admin-resend" data-id="${m.id}">${st === 'invited' ? 'Resend invite' : 'Send sign-in link'}</button>` : ''}
         </div>
-        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. Members sign in with emailed links, so there are no passwords to reset.</span></div>
+        <span class="muted-note">Disabling blocks sign-in and all data access straight away; their records stay. Members set their own password after their first sign-in link. If someone forgets it, send them a sign-in link and they’ll be asked to set a new one.</span></div>
       <span class="err" id="aerr" role="alert"></span>
     </div>
     ${foot('<button class="btn btn-primary">Save changes</button>', `<button type="button" class="btn btn-del" data-act="admin-remove" data-id="${m.id}" ${self || lastAdmin ? 'disabled' : ''}>${ic('trash')}Remove member</button>`)}</form>`, 'narrow');

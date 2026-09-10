@@ -812,3 +812,7 @@ body.welcome-open{overflow:hidden}
   .w-body h1{font-size:28px}
   .w-actions .btn-primary{flex:1;justify-content:center}
 }
+
+/* ===== sign-in: password + link fallback ===== */
+.login-alt{display:flex;flex-direction:column;gap:8px;padding-top:16px;margin-top:2px;border-top:1px solid var(--border);font-size:13px;color:var(--text-muted)}
+.login-card .btn{height:42px}

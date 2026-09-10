@@ -101,12 +101,20 @@ Everyone else is invited from Rocket's **Admin** section. Make a second admin ea
 3. Put the Vercel address into Supabase's Site URL and Redirect URLs (step 2) and `SITE_URL` (step 3).
 4. Open the site, sign in with your email link, and open **Admin**.
 
+## Signing in
+
+- **First time:** the invite email (or "Email me a sign-in link" on the login page) signs you in once, then Rocket asks you to set a password.
+- **After that:** sign in with email and password — in the browser or in the Rocket app on your home screen. (On iPhone the home-screen app can't receive sign-in links, which is why the password exists.)
+- **Forgot it:** "Email me a sign-in link", then set a new password. Or change it any time from the sidebar or the More menu.
+
+In Supabase, **Authentication → Sign In / Providers → Email**: set **Minimum password length** to 8, and leave **Secure password change** off.
+
 ## What the admin can do
 
 - **Invite** a member: name, `@aus.edu` email, club role, team, and optionally admin rights. They get an email with a sign-in link.
 - **Edit** name, club role, team and admin rights. Rocket always keeps at least one admin.
 - **Disable / enable** a login. Disabled members can't sign in and the database refuses all their reads and writes; their records stay.
-- **Resend** a sign-in link. There are no passwords to reset.
+- **Send a sign-in link**. New members use it once, then set a password; members who forget their password use it to set a new one.
 - **Remove** a member (with confirmation). Their account is deleted; anything they owned becomes unassigned.
 - See every admin action in the **Admin activity** log.
 - **Write the knowledge base**: add, edit and delete articles with headings, lists, links and images (Knowledge Base → New article).

@@ -92,13 +92,13 @@ function installSteps(p) {
       ${s(1, 'Open <b>userocket.vercel.app</b> in <b>Safari</b>.')}
       ${s(2, `Tap <b>Share</b> <span class="w-ico">${STEP_ICON.share}</span> in the toolbar.`)}
       ${s(3, `Scroll down and tap <b>Add to Home Screen</b> <span class="w-ico">${STEP_ICON.addsq}</span>.`)}
-      ${s(4, 'Tap <b>Add</b>, then open Rocket from your home screen.')}</ol>
+      ${s(4, 'Tap <b>Add</b>, open Rocket from your home screen, and sign in with your email and password.')}</ol>
     <p class="w-note">iPhone only shows notifications for apps on the home screen (iOS 16.4 or later).</p>`;
   if (p === 'android') return (installEvt && welcome.platform === 'android' ? `<button type="button" class="btn btn-primary w-big" data-act="pwa-install">${STEP_ICON.install}Install Rocket</button><p class="w-note">Or do it by hand:</p>` : '') + `<ol class="w-steps">
       ${s(1, 'Open <b>userocket.vercel.app</b> in <b>Chrome</b>.')}
       ${s(2, `Tap the menu <span class="w-ico">${STEP_ICON.dots}</span> at the top right.`)}
       ${s(3, 'Tap <b>Install app</b> (or <b>Add to Home screen</b>).')}
-      ${s(4, 'Open Rocket from your home screen or app drawer.')}</ol>`;
+      ${s(4, 'Open Rocket from your home screen and sign in with your email and password.')}</ol>`;
   return (installEvt && welcome.platform === 'desktop' ? `<button type="button" class="btn btn-primary w-big" data-act="pwa-install">${STEP_ICON.install}Install Rocket on this computer</button><p class="w-note">Or do it by hand:</p>` : '') + `<ol class="w-steps">
       ${s(1, `In <b>Chrome</b> or <b>Edge</b>, click the install icon <span class="w-ico">${STEP_ICON.install}</span> at the right of the address bar.`)}
       ${s(2, 'On a Mac in <b>Safari</b>: <b>File → Add to Dock</b>.')}

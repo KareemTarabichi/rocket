@@ -436,6 +436,14 @@ const ACT = {
   more: () => moreSheet(),
   reset: () => { if (LIVE) return; cancelDeletion(); closeDialog(); const r = state.role; state = seed(); state.role = r; state.meId = state.members.find(m => m.role === r).id; save(); render(); toast('Demo data reset'); },
   'sign-out': () => { if (LIVE) { closeDialog(); signOut(); } },
+  'login-link': () => sendLoginLink(loginEmail()),
+  'change-password': () => { if (!LIVE) return;
+    openDialog(`<form data-form="change-password" novalidate>${dHead('Change your password', `For <span class="mono">${esc(me().email)}</span>`)}
+      <div class="dlg-body"><input type="email" name="username" value="${esc(me().email)}" autocomplete="username" hidden>
+        ${field('New password', '<input class="input" id="cp-new" name="password" type="password" autocomplete="new-password" minlength="8" required>', 'cp-new')}
+        ${field('Type it again', '<input class="input" id="cp-again" name="again" type="password" autocomplete="new-password" minlength="8" required>', 'cp-again')}
+        <span class="muted-note">At least 8 characters. Other devices stay signed in.</span><div id="cp-msg" role="status"></div></div>
+      ${foot('<button class="btn btn-primary">Change password</button>')}</form>`, 'narrow'); },
   'admin-refresh': () => { adminData.members = null; adminData.error = ''; render(); },
   'admin-invite': () => openAdminInvite(),
   'admin-edit': el => openAdminEdit(el.dataset.id),
@@ -645,7 +653,17 @@ const FORMS = {
     upsert(state.budget.reimbursements, rec); finish(id ? 'Reimbursement saved' : 'Reimbursement added', rec.status);
   },
   member(f, fd) { if (!oversight()) return closeDialog(); member(f.dataset.id).responsibility = fd.get('responsibility').trim(); finish('Responsibility updated'); },
-  login(f, fd) { if (LIVE) sendLoginLink(String(fd.get('email') || '')); },
+  login(f, fd) { if (LIVE) passwordSignIn(String(fd.get('email') || ''), String(fd.get('password') || '')); },
+  async 'set-password'(f, fd) {
+    const btn = f.querySelector('.btn-primary'); btn.disabled = true;
+    const ok = await savePassword(String(fd.get('password') || ''), String(fd.get('again') || ''), $('#p-msg'));
+    btn.disabled = false;
+    if (ok) { openApp(); toast('Password saved', 'use it to sign in on any device, including the home-screen app'); }
+  },
+  async 'change-password'(f, fd) {
+    const ok = await savePassword(String(fd.get('password') || ''), String(fd.get('again') || ''), $('#cp-msg'));
+    if (ok) { closeDialog(); toast('Password changed'); }
+  },
   kb() {
     if (!isAdmin()) return closeDialog();
     const ta = $('#kb-body'); if (typeof ta?.value === 'string') draft.body = ta.value;
