@@ -841,3 +841,23 @@ ol.setup code{font:12.5px var(--f-mono);background:var(--surface-raised);padding
 .hero h1.tagline.fade{opacity:0}
 .tagline-by{font:400 15px var(--f-body);color:var(--text-muted);white-space:nowrap}
 @media (max-width:760px){.hero h1.tagline{min-height:3.8em;font-size:18px}.tagline-by{font-size:13.5px}}
+
+/* ===== Pull to refresh: Rocket launch ===== */
+html,body{overscroll-behavior-y:none}          /* our pull replaces the browser's own */
+.ptr{position:fixed;inset:0 0 auto 0;height:0;pointer-events:none;z-index:35;--g:0}
+.ptr-rocket{position:fixed;left:50%;top:0;width:44px;height:44px;margin-left:-22px;opacity:0;will-change:transform,opacity;transform-origin:50% 60%;
+  filter:drop-shadow(0 0 calc(3px + 9px * var(--g)) rgba(77,217,232,calc(.2 + .5 * var(--g)))) drop-shadow(0 6px calc(4px + 10px * var(--g)) rgba(245,185,66,calc(.1 + .35 * var(--g))))}
+.ptr-mark{position:relative;width:100%;height:100%;display:block;z-index:2}
+/* exhaust: a hot amber core fading to cyan, starting at the mark's amber stem */
+.ptr-trail{position:absolute;left:50%;top:80%;width:4px;margin-left:-2px;height:4px;border-radius:3px;opacity:0;z-index:1;
+  background:linear-gradient(to bottom,#F5B942 0%,rgba(245,185,66,.75) 18%,rgba(77,217,232,.45) 55%,rgba(77,217,232,0) 100%);filter:blur(.6px)}
+.ptr-trail::after{content:"";position:absolute;left:50%;top:0;width:16px;height:100%;margin-left:-8px;border-radius:8px;
+  background:linear-gradient(to bottom,rgba(245,185,66,.45),rgba(77,217,232,.18) 60%,transparent);filter:blur(6px)}
+.ptr-halo{position:absolute;inset:-14px;border-radius:50%;z-index:0;opacity:calc(.25 * var(--g));
+  background:radial-gradient(circle,rgba(77,217,232,.45) 0%,rgba(77,217,232,0) 65%);transition:opacity .2s ease}
+.ptr.armed .ptr-rocket{animation:ptr-arm .22s ease-out}
+.ptr.armed .ptr-halo{opacity:.55}
+.ptr.launching .ptr-halo{opacity:.8}
+@keyframes ptr-arm{50%{scale:1.12}}
+.ptr-label{position:fixed;left:0;right:0;top:0;text-align:center;font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);opacity:.8}
+@media (prefers-reduced-motion:reduce){.ptr.armed .ptr-rocket{animation:none}}
