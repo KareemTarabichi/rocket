@@ -126,6 +126,16 @@ Deno.serve(async (req) => {
       const sent = await sendTo(added, { title: `${me.name} added you to an idea`, body: `${i.title}${i.next_step ? ` · next: ${i.next_step}` : ''}`, url: `${SITE_URL}/?view=ideas`, tag: `idea-${id}` });
       return json({ ok: true, sent });
     }
+    case 'idea-comment': {   // a contribution on an idea → its owner and collaborators
+      const { data: c } = await db.from('idea_comments').select('idea_id, author, title, body').eq('id', id).maybeSingle();
+      if (!c || c.author !== me.id) return json({ error: 'Only the author can send this.' }, 403);
+      const { data: i } = await db.from('ideas').select('title, owner, assigned').eq('id', c.idea_id).maybeSingle();
+      if (!i) return json({ error: 'Idea not found.' }, 404);
+      const text = c.title ? `${c.title} — ${c.body}` : c.body;
+      const sent = await sendTo([i.owner, ...(i.assigned ?? [])].filter((u) => u && u !== me.id),
+        { title: `${me.name} added to “${i.title}”`, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: `${SITE_URL}/?view=ideas`, tag: `idea-comment-${c.idea_id}` });
+      return json({ ok: true, sent });
+    }
     case 'event': {   // people newly assigned to an event or to one of its checklist items
       const [{ data: e }, { data: reqs }] = await Promise.all([
         db.from('events').select('name, date, team, assigned, created_by').eq('id', id).maybeSingle(),

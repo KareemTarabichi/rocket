@@ -47,7 +47,8 @@ const ICON = {
   logout:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>',
   folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
-  ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
+  ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 const mq = window.matchMedia('(max-width: 760px)');
@@ -184,7 +185,13 @@ function seed() {
     {id:uid('n'), kind:'invite', title:'Meeting invitation: Leadership weekly sync', details:`${fmtDate(T)} · 6:00 PM–7:00 PM · Launchpad room`, recipients:['m1','m2','m3','m4'], at:new Date(Date.now() - 864e5 * 2).toISOString(), calendar:false},
     {id:uid('n'), kind:'invite', title:'Meeting invitation: All-members monthly', details:`${fmtDate(D(6))} · 5:30 PM–6:30 PM · Main Plaza auditorium`, recipients:members.map(m => m.id), at:new Date(Date.now() - 864e5).toISOString(), calendar:false}];
 
-  return {version:2, role:'ea', meId:'m4', members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, kb,
+  const C = (ideaId, author, hoursAgo, title, body) => ({id:uid('ic'), ideaId, author, title, body, at:new Date(Date.now() - hoursAgo * 36e5).toISOString()});
+  const ideaComments = [
+    C('i2', 'm7', 30, 'Guest list for the pilot', 'Start with two Rise founders who already said yes to interviews. Keep it to 20 minutes.'),
+    C('i2', 'm9', 6, '', 'The library has a recording room we can book for free — I’ll check next week’s slots.'),
+    C('i4', 'm11', 20, 'Problem statements', 'Pull three problems from the startup directory notes so teams build for real founders.'),
+    C('i4', 'm6', 3, 'Judges', 'Yousef can bring two founders from the directory to judge on the last day.')];
+  return {version:2, role:'ea', meId:'m4', ideaComments, members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, kb,
     settings:{designDriveUrl:'', links:emptyLinks()}, calendar:{connected:false, email:''}};
 }
 
@@ -195,7 +202,7 @@ let state = null;   // live mode: filled from Supabase after sign-in
 function initDemoState() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
-  ensureLinks();
+  ensureLinks(); state.ideaComments ||= [];
 }
 let view = 'overview';
 let draft = null;          // record being edited in the open dialog
@@ -240,7 +247,13 @@ const oversight = (role = state.role) => OVERSIGHT.includes(role);
 const ea = (role = state.role) => role === 'ea';
 const isAdmin = () => !!me()?.is_admin;
 const access = (section, role = state.role) => section === 'admin' ? isAdmin() : BASE_SECTIONS.includes(section) || (oversight(role) && OVERSIGHT_SECTIONS.includes(section)) || (EXTRA_SECTIONS[role] || []).includes(section);
-const canIdea = idea => !!idea && (oversight() || idea.owner === me().id || idea.assigned.includes(me().id));
+const canIdea = idea => !!idea && (oversight() || isAdmin() || idea.owner === me().id || idea.assigned.includes(me().id));
+// The owner is locked; only the owner or an admin deletes; owner + collaborators contribute.
+const canDeleteIdea = idea => !!idea && (idea.owner === me().id || isAdmin());
+const canCommentIdea = idea => !!idea && (idea.owner === me().id || idea.assigned.includes(me().id));
+const ideaOf = c => state.ideas.find(i => i.id === c?.ideaId);
+const canDeleteComment = c => !!c && (c.author === me().id || ideaOf(c)?.owner === me().id || isAdmin());
+const commentsFor = ideaId => (state.ideaComments || []).filter(c => c.ideaId === ideaId).sort((a, b) => a.at.localeCompare(b.at));
 const canEvent = ev => !!ev && (oversight() || ev.createdBy === me().id || teamMembers(ev.team).includes(me().id));
 const canTask = item => !!item && (oversight() || item.owners.includes(me().id));
 const canDesignStatus = d => access('design') || d.owner === me().id;
@@ -249,7 +262,8 @@ const canApproveStartupDeletion = () => isAdmin() || state.role === 'president';
 function deletable(kind, rec) {
   if (!rec) return false;
   if (kind === 'meeting') return ea();
-  if (kind === 'idea') return canIdea(rec);
+  if (kind === 'idea') return canDeleteIdea(rec);
+  if (kind === 'comment') return canDeleteComment(rec);
   if (kind === 'startup') return canApproveStartupDeletion();
   if (kind === 'kb') return isAdmin();
   if (kind === 'member') { const list = adminData.members || state.members;

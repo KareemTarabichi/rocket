@@ -133,6 +133,12 @@ Later, if you connect your own email sender (Authentication → Emails → SMTP)
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.
 
+## Ideas
+
+- The person who submits an idea is its **owner** — locked for good. (If an owner is removed from Rocket, an admin can assign a new one.)
+- The owner invites **collaborators**. Owner and collaborators can edit the idea and post **contributions** — a thread of mini sub-ideas with an optional headline. Everyone can read them.
+- Only the **owner or an admin** can delete an idea. Contributions can be deleted by their author, the idea owner, or an admin.
+
 ## Notifications
 
 The bell (top right of every page, or the top bar on phones) lists what needs *you*: your deadlines that are overdue or due within a day, meetings today or tomorrow, new design work, reviews waiting for PR, ideas to review (leadership), reimbursements to approve (budget roles) and startup deletions to decide (admins and the President). Meeting invitations, changes and cancellations addressed to you appear underneath. The unread marker is kept per browser.
@@ -152,7 +158,7 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
 
 ## Phone notifications
 
-Members turn notifications on from the bell (or the welcome screen). On iPhone they must first add Rocket to the home screen (iOS 16.4+). Notifications go out for meeting invitations, changes and cancellations; design requests and follow-ups assigned to you; being added to an idea (owner or collaborator), an event, or an event checklist item; startup deletion requests (admins and the President); and a 9 AM summary of what's overdue or due today.
+Members turn notifications on from the bell (or the welcome screen). On iPhone they must first add Rocket to the home screen (iOS 16.4+). Notifications go out for meeting invitations, changes and cancellations; design requests and follow-ups assigned to you; being added to an idea (owner or collaborator), an event, or an event checklist item; new contributions on an idea you own or collaborate on; startup deletion requests (admins and the President); and a 9 AM summary of what's overdue or due today.
 
 Set up once, in Terminal (in this folder):
 

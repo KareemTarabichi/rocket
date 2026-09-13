@@ -861,3 +861,17 @@ html,body{overscroll-behavior-y:none}          /* our pull replaces the browser'
 @keyframes ptr-arm{50%{scale:1.12}}
 .ptr-label{position:fixed;left:0;right:0;top:0;text-align:center;font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);opacity:.8}
 @media (prefers-reduced-motion:reduce){.ptr.armed .ptr-rocket{animation:none}}
+
+/* ===== idea contributions ===== */
+.owner-locked{min-height:34px;display:flex;align-items:center;gap:8px;font-size:13.5px}
+.owner-locked svg{width:13px;height:13px}
+.idea-card .faint svg{width:13px;height:13px;vertical-align:-2px;margin-right:3px}
+.idea-thread{border-top:1px solid var(--border);padding-top:16px;gap:12px}
+.contrib{border:1px solid var(--border);border-left:3px solid var(--violet);border-radius:var(--r-sm);padding:10px 12px;background:var(--ink);display:flex;flex-direction:column;gap:6px}
+.contrib-head{display:flex;align-items:center;gap:8px;font-size:13px}
+.contrib-head time{margin-left:auto;font:11.5px var(--f-mono);color:var(--text-faint)}
+.contrib-head .icon-btn{width:28px;height:28px}
+.contrib-head .icon-btn svg{width:14px;height:14px}
+.contrib-title{font-weight:600;font-size:14.5px}
+.contrib p{margin:0;font-size:13.5px;color:var(--text-muted);white-space:pre-wrap;line-height:1.55}
+.contrib-new{display:flex;flex-direction:column;gap:8px}

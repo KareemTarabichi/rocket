@@ -214,11 +214,11 @@ function filteredIdeas() {
     (f.stage === 'all' || (f.stage === 'active' ? i.stage !== 'completed' : i.stage === f.stage)) && (f.scope === 'all' || relevantIdea(i)));
 }
 function ideaCard(i) {
-  const ok = canIdea(i);
+  const ok = canIdea(i), nComments = commentsFor(i.id).length;
   return `<article class="idea-card" data-act="open-idea" data-id="${i.id}" tabindex="0">
     <h3>${esc(i.title)}</h3>
     <div class="next">↳ ${esc(i.next || 'No next step')}${i.due ? ` · ${fmtDate(i.due, {day:'numeric', month:'short'})}` : ''}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="who">${avatar(i.owner)}<span class="team-lbl">${esc(teamName(i.team))}</span></span>${i.assigned.length ? `<span class="stack">${i.assigned.map(a => avatar(a)).join('')}</span>` : ''}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="who">${avatar(i.owner)}<span class="team-lbl">${esc(teamName(i.team))}</span></span><span style="display:flex;align-items:center;gap:8px">${nComments ? `<span class="faint num" style="font-size:12px" title="${nComments} contribution${nComments === 1 ? '' : 's'}">${ic('chat')}${nComments}</span>` : ''}${i.assigned.length ? `<span class="stack">${i.assigned.map(a => avatar(a)).join('')}</span>` : ''}</span></div>
     ${ok ? `<select class="input" data-change="idea-stage" data-id="${i.id}" aria-label="Stage for ${esc(i.title)}">${IDEA_STAGES.map(s => opt(s, IDEA_LABEL[s], i.stage)).join('')}</select>` : ''}
   </article>`;
 }

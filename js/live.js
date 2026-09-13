@@ -19,6 +19,7 @@ const COLLECTIONS = [
   {key:'requirements', table:'event_requirements', get:() => state.events.flatMap(e => e.tasks.map((r, i) => ({...r, eventId:e.id, position:i}))), to:r => ({id:r.id, event_id:r.eventId, title:r.title, owner:r.owner || null, due:r.due, done:!!r.done, position:r.position})},
   {key:'tasks', table:'tasks', mode:'upsert-no-delete', get:() => state.tasks, to:t => ({id:t.id, title:t.title, owner:t.owner || null, due:t.due, done:!!t.done, related:t.related || ''})},
   {key:'ideas', table:'ideas', get:() => state.ideas, to:i => ({id:i.id, title:i.title, description:i.description || '', team:i.team, owner:i.owner || null, assigned:i.assigned, stage:i.stage, notes:i.notes || '', next_step:i.next || '', due:i.due || null, previous_stage:i.previousStage || null})},
+  {key:'ideaComments', table:'idea_comments', get:() => state.ideaComments, to:c => ({id:c.id, idea_id:c.ideaId, author:c.author || null, title:c.title || '', body:c.body})},
   {key:'designs', table:'designs', mode:'upsert-no-delete', get:() => state.designs, to:d => ({id:d.id, title:d.title, event_id:d.event || null, campaign:d.campaign || '', brief:d.brief, deliverables:d.deliverables || '', owner:d.owner || null, due:d.due, status:d.status, previous_status:d.previousStatus || null})},
   {key:'startups', table:'startups', get:() => state.startups, to:s => ({id:s.id, name:s.name, sector:s.sector || '', notes:s.notes || '', attendance:s.attendance, contacts:s.contacts, rating:s.rating ?? null,
     deletion_requested_by:s.deletion?.by || null, deletion_requested_at:s.deletion?.at || null, deletion_reason:s.deletion?.reason || ''})},
@@ -39,9 +40,9 @@ async function buildState(userId) {
     q('profiles').order('name'), q('meetings'), sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100),
     q('calendar_settings').eq('id', 1).maybeSingle(), q('events').order('date'), q('event_requirements').order('position'), q('tasks'), q('ideas').order('created_at'),
     q('designs'), q('startups').order('name'), q('budget_settings').eq('id', 1).maybeSingle(), q('expenses'), q('reimbursements'),
-    q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle()]);
+    q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle(), q('idea_comments').order('created_at')]);
   const bad = res.find(r => r.error); if (bad) throw bad.error;
-  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st] = res.map(r => r.data);
+  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st, ic] = res.map(r => r.data);
   const members = p.map(x => ({id:x.id, name:x.name, role:x.role, team:x.team, email:x.email, responsibility:x.responsibility, is_admin:x.is_admin, active:x.active, whatsapp:x.whatsapp || ''}));
   const mine = members.find(x => x.id === userId);
   if (!mine || !mine.active) return null;
@@ -59,6 +60,7 @@ async function buildState(userId) {
       deletion:x.deletion_requested_at ? {by:x.deletion_requested_by, at:x.deletion_requested_at, reason:x.deletion_reason || ''} : null})),
     kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
     settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}},
+    ideaComments:(ic || []).map(x => ({id:x.id, ideaId:x.idea_id, author:x.author, title:x.title, body:x.body, at:x.created_at})),
     budget:{overall:+(bs?.overall || 0), allocations:bs?.allocations || {},
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),
       reimbursements:rb.map(x => ({id:x.id, name:x.name, member:x.member, event:x.event_id || '', amount:+x.amount, status:x.status, receipt:x.receipt}))},

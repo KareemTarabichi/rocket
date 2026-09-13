@@ -116,27 +116,55 @@ function renderEventForm() {
 function openIdea(id) {
   const i = id ? state.ideas.find(x => x.id === id) : null;
   if (id && !i) return;
+  const ownerLine = o => o ? `${avatar(o)} <span>${esc(member(o)?.name || 'Former member')}</span> <span class="faint" title="The owner can’t be changed">${ic('lock')}</span>` : '<span class="faint">No owner — the owner left Rocket</span>';
   if (i && !canIdea(i)) {
-    openDialog(`${dHead(i.title, `${esc(teamName(i.team))} team · owner ${esc(member(i.owner)?.name)}`, ideaBadge(i.stage))}
-      <div class="dlg-body">${readonlyNote('Read-only. The owner, collaborators and leadership can edit this idea.')}
+    openDialog(`${dHead(i.title, `${esc(teamName(i.team))} team · owner ${esc(member(i.owner)?.name || '—')}`, ideaBadge(i.stage))}
+      <div class="dlg-body">${readonlyNote(canCommentIdea(i) ? 'You can add contributions below.' : 'Read-only. The owner, collaborators and leadership can edit this idea.')}
         ${i.description ? `<p class="prose">${esc(i.description)}</p>` : ''}
-        <dl class="kv"><dt>Collaborators</dt><dd>${i.assigned.map(a => esc(member(a)?.name)).join(', ') || '—'}</dd><dt>Next step</dt><dd>${esc(i.next || '—')}</dd><dt>Target date</dt><dd>${fmtDateY(i.due)}</dd><dt>Notes</dt><dd style="white-space:pre-wrap">${esc(i.notes || '—')}</dd></dl></div>${foot('')}`);
+        <dl class="kv"><dt>Collaborators</dt><dd>${i.assigned.map(a => esc(member(a)?.name)).join(', ') || '—'}</dd><dt>Next step</dt><dd>${esc(i.next || '—')}</dd><dt>Target date</dt><dd>${fmtDateY(i.due)}</dd><dt>Notes</dt><dd style="white-space:pre-wrap">${esc(i.notes || '—')}</dd></dl>
+        ${ideaThread(i)}</div>${foot('')}`);
     return;
   }
   const v = i || {title:'', description:'', team:me().team, owner:me().id, assigned:[], stage:'submitted', notes:'', next:'', due:addDays(today(), 14)};
+  const orphan = i && !i.owner && isAdmin();   // only case where an owner can be (re)assigned
   openDialog(`<form data-form="idea" data-id="${i ? i.id : ''}" novalidate>
-    ${dHead(i ? 'Edit idea' : 'Submit an idea', i ? 'Owners, collaborators and leadership can edit.' : 'Anyone can submit. The next step becomes a deadline.')}
+    ${dHead(i ? 'Edit idea' : 'Submit an idea', i ? 'The owner, collaborators and leadership can edit. Only the owner or an admin can delete.' : 'You’ll be the owner. The next step becomes a deadline.')}
     <div class="dlg-body">
       ${field('Title', inp('title', v.title, 'required'), 'f-title')}
       ${field('Description', txt('description', v.description, 2), 'f-description')}
-      <div class="grid3">${field('Stage', `<select class="input" id="f-stage" name="stage">${IDEA_STAGES.map(s => opt(s, IDEA_LABEL[s], v.stage)).join('')}</select>`, 'f-stage')}${field('Team', `<select class="input" id="f-team" name="team">${teamOpts(v.team)}</select>`, 'f-team')}${field('Owner', `<select class="input" id="f-owner" name="owner">${state.members.map(m => opt(m.id, m.name, v.owner)).join('')}</select>`, 'f-owner')}</div>
-      <div class="field"><span class="lbl">Collaborators</span><div class="checks">${state.members.map(m => `<label class="cbox"><input type="checkbox" name="assigned" value="${m.id}" ${v.assigned.includes(m.id) ? 'checked' : ''}>${esc(m.name.split(' ')[0])}</label>`).join('')}</div></div>
+      <div class="grid3">${field('Stage', `<select class="input" id="f-stage" name="stage">${IDEA_STAGES.map(s => opt(s, IDEA_LABEL[s], v.stage)).join('')}</select>`, 'f-stage')}${field('Team', `<select class="input" id="f-team" name="team">${teamOpts(v.team)}</select>`, 'f-team')}
+        ${orphan ? field('Owner', `<select class="input" id="f-owner" name="owner"><option value="">Pick a new owner</option>${state.members.filter(m => m.active !== false).map(m => opt(m.id, m.name, '')).join('')}</select>`, 'f-owner')
+          : `<div class="field"><span class="lbl">Owner</span><div class="who owner-locked">${ownerLine(v.owner)}</div></div>`}</div>
+      <div class="field"><span class="lbl">Collaborators <span class="faint">— they can edit and add contributions</span></span><div class="checks">${state.members.filter(m => m.id !== v.owner && m.active !== false).map(m => `<label class="cbox"><input type="checkbox" name="assigned" value="${m.id}" ${v.assigned.includes(m.id) ? 'checked' : ''}>${esc(m.name.split(' ')[0])}</label>`).join('')}</div></div>
       <div class="grid2">${field('Next step', inp('next', v.next, 'placeholder="e.g. Draft a one-page format"'), 'f-next')}${field('Target date', inp('due', v.due, 'type="date"'), 'f-due')}</div>
       ${field('Notes', txt('notes', v.notes, 2), 'f-notes')}
       <span class="err" id="ierr" role="alert"></span>
+      ${i ? ideaThread(i) : ''}
     </div>
-    ${foot(`<button class="btn btn-primary">${i ? 'Save idea' : 'Submit idea'}</button>`, i ? `<button type="button" class="btn btn-del" data-act="del-idea" data-id="${i.id}">${ic('trash')}Delete idea</button>` : '')}
+    ${foot(`<button class="btn btn-primary">${i ? 'Save idea' : 'Submit idea'}</button>`, i && canDeleteIdea(i) ? `<button type="button" class="btn btn-del" data-act="del-idea" data-id="${i.id}">${ic('trash')}Delete idea</button>` : '')}
   </form>`);
+}
+// Contributions: a thread of mini sub-ideas from the owner and collaborators. Lives inside the idea
+// dialog but posts on its own (not through the idea form), so unsaved edits above are kept.
+function ideaThread(i) {
+  return `<div class="sect idea-thread" id="idea-thread" data-idea="${i.id}">${ideaThreadInner(i)}</div>`;
+}
+function ideaThreadInner(i) {
+  const list = commentsFor(i.id), can = canCommentIdea(i);
+  return `<span class="eyebrow">Contributions · ${list.length}</span>
+    ${list.map(c => `<article class="contrib">
+      <div class="contrib-head"><span class="who">${avatar(c.author)}<span>${esc(member(c.author)?.name || 'Former member')}</span></span>${c.author === i.owner ? '<span class="tag">Owner</span>' : ''}<time>${fmtStamp(c.at)}</time>
+        ${canDeleteComment(c) ? `<button type="button" class="btn btn-ghost sm icon-btn" data-act="idea-comment-del" data-id="${c.id}" aria-label="Delete contribution" title="Delete">${ic('trash')}</button>` : ''}</div>
+      ${c.title ? `<div class="contrib-title">${esc(c.title)}</div>` : ''}<p>${esc(c.body)}</p></article>`).join('') || `<span class="faint" style="font-size:13px">${can ? 'No contributions yet. Add the first one below.' : 'No contributions yet.'}</span>`}
+    ${can ? `<div class="contrib-new">
+      <input class="input" id="ic-title" maxlength="120" placeholder="Headline (optional) — e.g. Guest list, Budget, Risks" aria-label="Contribution headline">
+      <textarea class="input" id="ic-body" rows="3" maxlength="4000" placeholder="Add your part of the idea…" aria-label="Contribution"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="muted-note">The owner and collaborators get notified.</span><button type="button" class="btn sm btn-primary" data-act="idea-comment" data-id="${i.id}">Add contribution</button></div></div>`
+    : `<span class="muted-note">Only the owner and invited collaborators can add contributions.</span>`}`;
+}
+function refreshIdeaThread(ideaId) {
+  const el = document.getElementById('idea-thread'), i = state.ideas.find(x => x.id === ideaId);
+  if (el && i && el.dataset.idea === ideaId) el.innerHTML = ideaThreadInner(i);
 }
 
 /* ---------- follow-up task ---------- */
@@ -349,17 +377,18 @@ function openNotifications() {
 }
 
 /* ================= deletion ================= */
-const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb}[kind] || adminData.members || state.members).find(x => x.id === id);
-const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the owner, collaborators or leadership can delete this idea'};
+const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb, comment:state.ideaComments}[kind] || adminData.members || state.members).find(x => x.id === id);
+const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the idea’s owner or an admin can delete it', comment:'Only its author, the idea owner or an admin can delete this'};
 function requestDeletion(kind, id) {
   const rec = deletionRecord(kind, id);
   if (!deletable(kind, rec)) { toast(DENY[kind], '', true); return; }
   pendingDeletion = {kind, id};
-  const name = kind === 'member' || kind === 'startup' ? rec.name : rec.title;
+  const name = kind === 'member' || kind === 'startup' ? rec.name : kind === 'comment' ? (rec.title || 'this contribution') : rec.title;
   const consequence = kind === 'meeting'
     ? `A cancellation notice goes to its ${recipients(rec).length} current attendees${state.calendar.connected ? ' and the calendar entry is cancelled (simulated)' : ''}. Past notifications stay in the log.`
     : kind === 'startup' ? `Its contacts, notes and attendance history are deleted for everyone.${rec.deletion ? ` Requested by ${member(rec.deletion.by)?.name || 'a member'}${rec.deletion.reason ? `: “${rec.deletion.reason}”` : ''}.` : ''}`
     : kind === 'kb' ? 'The article disappears for everyone. Any images uploaded for it stay in storage.'
+    : kind === 'comment' ? `${member(rec.author)?.name || 'This'} contribution is removed from the idea for everyone.`
     : kind === 'member' ? `${rec.name} (${rec.email}) loses access straight away. Anything they owned becomes unassigned, and they’re taken off meeting invites, event assignments and idea collaborators. To keep their history instead, disable their login.`
     : `Its next step${rec.next ? ` (“${rec.next}”)` : ''} disappears from Deadlines too. Separate follow-up tasks aren’t affected.`;
   const c = $('#confirm');
@@ -376,6 +405,7 @@ function confirmDeletion() {
   if (p.kind === 'member') { cancelDeletion(); return runAdmin('remove', {id:rec.id}, `Removed ${rec.name}`, rec.email); }
   if (p.kind === 'startup') { state.startups = state.startups.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted ${rec.name}`, 'removed from the directory'); }
   if (p.kind === 'kb') { state.kb = state.kb.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted “${rec.title}”`); }
+  if (p.kind === 'comment') { state.ideaComments = state.ideaComments.filter(x => x.id !== rec.id); cancelDeletion(); save(); refreshIdeaThread(rec.ideaId); render(); return toast('Contribution deleted'); }
   if (p.kind === 'meeting' && LIVE && rec.onCalendar && !p.calendarDone) {
     p.calendarDone = true;
     const btn = $('#confirm [data-act="del-confirm"]'); if (btn) { btn.disabled = true; btn.textContent = 'Cancelling invite…'; }
@@ -385,7 +415,7 @@ function confirmDeletion() {
   if (p.kind === 'meeting') {
     cancelId = notify('cancel', `Meeting cancelled: ${rec.title}`, `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`, recipients(rec));
     state.meetings = state.meetings.filter(x => x.id !== rec.id);
-  } else state.ideas = state.ideas.filter(x => x.id !== rec.id);
+  } else { state.ideas = state.ideas.filter(x => x.id !== rec.id); state.ideaComments = state.ideaComments.filter(c => c.ideaId !== rec.id); }
   cancelDeletion();
   finish(p.kind === 'meeting' ? `Deleted “${rec.title}”` : `Deleted idea “${rec.title}”`,
     p.kind === 'meeting' ? `cancellation sent to ${recipients(rec).length}${LIVE ? (rec.onCalendar ? ' · calendar event cancelled' : '') : ' (simulated)'}` : 'next step removed from Deadlines');
@@ -509,6 +539,15 @@ const ACT = {
     try { const {url} = await calendarApi('auth-url'); location.href = url; } catch (e) { el.disabled = false; el.textContent = 'Connect Google Calendar'; toast('Couldn’t start the Google sign-in: ' + e.message, '', true); } },
   'cal-sync-all': async el => { if ((!ea() && !isAdmin()) || !LIVE) return; el.disabled = true; el.textContent = 'Adding…';
     try { const r = await calendarApi('sync-all'); await reloadLive(); toast(`Added ${r.synced} upcoming meeting${r.synced === 1 ? '' : 's'} to Google Calendar`, r.failed ? `${r.failed} failed` : 'invites sent'); } catch (e) { toast(e.message, '', true); el.disabled = false; } },
+  'idea-comment': el => {
+    const i = state.ideas.find(x => x.id === el.dataset.id); if (!canCommentIdea(i)) return toast('Only the owner and collaborators can add contributions', '', true);
+    const title = ($('#ic-title')?.value || '').trim(), body = ($('#ic-body')?.value || '').trim();
+    if (!body) { $('#ic-body')?.focus(); return toast('Write your contribution first', '', true); }
+    const c = {id:uid('ic'), ideaId:i.id, author:me().id, title:title.slice(0, 120), body:body.slice(0, 4000), at:new Date().toISOString()};
+    state.ideaComments.push(c); save(); refreshIdeaThread(i.id); render(); toast('Contribution added', i.title);
+    afterSync(() => fnApi('push', 'idea-comment', {id:c.id}).catch(() => {}));
+  },
+  'idea-comment-del': el => requestDeletion('comment', el.dataset.id),
   'admin-tab': el => { adminTab = el.dataset.v; if (adminTab === 'links') adminData.calendar = null; render(); },
   'admin-links': () => { adminTab = 'links'; adminData.calendar = null; go('admin'); },
   'link-row-add': () => { $('#custom-links').insertAdjacentHTML('beforeend', customRow()); $('#custom-links .custom-row:last-child [data-cl]').focus(); },
@@ -542,7 +581,10 @@ document.addEventListener('click', e => {
   if (el.tagName === 'A') e.preventDefault();
   ACT[el.dataset.act]?.(el, e);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.mt-row, .idea-card, tbody tr, .nitem.click')) e.target.click(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('.mt-row, .idea-card, tbody tr, .nitem.click')) e.target.click();
+  if (e.key === 'Enter' && e.target.id === 'ic-title') { e.preventDefault(); $('#ic-body')?.focus(); }   // don't submit the idea form
+});
 
 const CHANGE = {
   role: el => switchRole(el.value),
@@ -623,7 +665,8 @@ const FORMS = {
   idea(f, fd) {
     const id = f.dataset.id, prev = id ? state.ideas.find(x => x.id === id) : null, err = $('#ierr');
     if (prev && !canIdea(prev)) { toast('You can’t edit this idea', '', true); return closeDialog(); }
-    const rec = {...(prev || {}), id:id || uid('i'), title:fd.get('title').trim(), description:fd.get('description').trim(), team:fd.get('team'), owner:fd.get('owner'), assigned:fd.getAll('assigned').filter(a => a !== fd.get('owner')), stage:fd.get('stage'), notes:fd.get('notes').trim(), next:fd.get('next').trim(), due:fd.get('due')};
+    const owner = prev ? (prev.owner || (isAdmin() && fd.get('owner')) || null) : me().id;   // locked
+    const rec = {...(prev || {}), id:id || uid('i'), title:fd.get('title').trim(), description:fd.get('description').trim(), team:fd.get('team'), owner, assigned:fd.getAll('assigned').filter(a => a !== owner), stage:fd.get('stage'), notes:fd.get('notes').trim(), next:fd.get('next').trim(), due:fd.get('due')};
     if (!rec.title) { err.textContent = 'Give the idea a title.'; return; }
     if (rec.next && !rec.due) { err.textContent = 'Add a target date so the next step shows up in Deadlines.'; return; }
     if (prev && rec.stage === 'completed' && prev.stage !== 'completed') rec.previousStage = prev.stage;
