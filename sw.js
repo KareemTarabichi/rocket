@@ -1,6 +1,6 @@
 /* Rocket service worker: offline fallback for the app shell, and push notifications.
    Always tries the network first so a new deploy is picked up straight away. */
-const CACHE = 'rocket-shell-v2';
+const CACHE = 'rocket-shell-v3';
 const SHELL = ['/', '/index.html', '/styles.css', '/config.js', '/js/core.js', '/js/views.js', '/js/views-more.js',
   '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/app.js', '/icons/icon-192.png', '/manifest.webmanifest'];
 
@@ -13,10 +13,11 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request, url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;   // never touch Supabase or other hosts
-  event.respondWith(fetch(req).then(res => {
+  // no-cache: always check with the server, never reuse an old copy from the browser's cache
+  event.respondWith((req.mode === 'navigate' ? fetch(req) : fetch(req, {cache:'no-cache'})).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
-  }).catch(() => caches.match(req).then(hit => hit || (req.mode === 'navigate' ? caches.match('/index.html') : Response.error()))));
+  }).catch(() => caches.match(req, {ignoreSearch:true}).then(hit => hit || (req.mode === 'navigate' ? caches.match('/index.html') : Response.error()))));
 });
 
 self.addEventListener('push', event => {

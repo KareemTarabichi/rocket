@@ -40,6 +40,7 @@ function renderShell() {
       <div class="whoami" style="flex-direction:row;align-items:center;gap:10px">${avatar(me().id)}<div style="min-width:0;flex:1"><div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(me().name)}</div><div class="faint" style="font-size:11.5px">${esc(roleLabel(state.role))}${isAdmin() ? ' · Admin' : ''}</div></div>
         <button class="btn btn-ghost sm icon-btn" data-act="sign-out" aria-label="Sign out" title="Sign out">${ic('logout')}</button></div>
       <div style="display:flex;flex-direction:column;gap:6px;padding:0 4px"><button class="linkbtn" data-act="change-password">Change password</button>
+      <span class="faint" style="font-size:11px">Rocket ${APP_VERSION} · <button class="linkbtn" data-act="hard-reload" style="font-size:11px;display:inline">Reload</button></span>
       ${isStandalone() ? '' : `<button class="linkbtn" data-act="welcome-install">${ic('plus')} Install Rocket on this device</button>`}</div>` : `
       <div class="whoami role-sw"><label for="role-d">Demo role switcher</label>${roleSelect('role-d')}<span class="faint" style="font-size:11.5px">No sign-in in this demo. Pick a role to see its view. Tech is also the platform admin.</span></div>
       <div style="display:flex;gap:14px;padding:0 4px"><button class="linkbtn" data-act="reset">Reset demo data</button></div>`}
@@ -59,6 +60,7 @@ function moreSheet() {
       ${LIVE ? `<p class="muted-note" style="margin:0">Signed in as <span class="mono">${esc(me().email)}</span>${isAdmin() ? ' · Admin' : ''}</p>
       ${isStandalone() ? '' : `<button class="btn" data-act="welcome-install" style="justify-content:center">${ic('plus')}Add Rocket to your home screen</button>`}
       <button class="btn" data-act="change-password" style="justify-content:center">Change password</button>
+      <button class="btn" data-act="hard-reload" style="justify-content:center">Reload Rocket <span class="faint mono" style="font-size:11px">${APP_VERSION}</span></button>
       <button class="btn" data-act="sign-out" style="justify-content:center">${ic('logout')}Sign out</button>` : `
       <div class="field role-sw"><label for="role-m">Demo role switcher</label>${roleSelect('role-m')}</div>
       <p class="muted-note" style="margin:0">One sample member per role. Switching updates sections, records and permissions straight away. Tech is also the platform admin.</p>

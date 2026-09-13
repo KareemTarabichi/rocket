@@ -466,6 +466,13 @@ const ACT = {
   more: () => moreSheet(),
   reset: () => { if (LIVE) return; cancelDeletion(); closeDialog(); const r = state.role; state = seed(); state.role = r; state.meId = state.members.find(m => m.role === r).id; save(); render(); toast('Demo data reset'); },
   'sign-out': () => { if (LIVE) { closeDialog(); signOut(); } },
+  // Clears any cached copy of Rocket and loads the latest version from the server.
+  'hard-reload': async () => {
+    toast('Loading the latest Rocket…');
+    try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
+    try { const regs = await navigator.serviceWorker?.getRegistrations(); await Promise.all((regs || []).map(r => r.update())); } catch (e) {}
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  },
   'login-code': () => sendLoginCode(loginEmail()),
   'login-resend': el => sendLoginCode(el.dataset.email).then(() => { const m = $('#l-msg'); if (m && !m.innerHTML) m.innerHTML = '<span class="faint">New code sent. Use the latest email.</span>'; }),
   'login-back': () => showLogin(),
