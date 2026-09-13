@@ -152,7 +152,7 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
 
 ## Phone notifications
 
-Members turn notifications on from the bell (or the welcome screen). On iPhone they must first add Rocket to the home screen (iOS 16.4+). Notifications go out for meeting invitations, changes and cancellations; design requests and follow-ups assigned to you; startup deletion requests (admins and the President); and a 9 AM summary of what's overdue or due today.
+Members turn notifications on from the bell (or the welcome screen). On iPhone they must first add Rocket to the home screen (iOS 16.4+). Notifications go out for meeting invitations, changes and cancellations; design requests and follow-ups assigned to you; being added to an idea (owner or collaborator), an event, or an event checklist item; startup deletion requests (admins and the President); and a 9 AM summary of what's overdue or due today.
 
 Set up once, in Terminal (in this folder):
 

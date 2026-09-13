@@ -615,7 +615,10 @@ const FORMS = {
     if (!v.name.trim() || !v.date) { err.textContent = 'Give the event a name and a date.'; return; }
     if (v.tasks.some(t => !t.title.trim() || !t.due)) { err.textContent = 'Every requirement needs a title and a due date — or remove the empty ones.'; return; }
     const rec = {...v, name:v.name.trim()}; delete rec._new;
+    const people = e => new Set([...(e?.assigned || []), ...(e?.tasks || []).map(t => t.owner)].filter(Boolean));
+    const before = people(existing), added = [...people(rec)].filter(u => !before.has(u) && u !== me().id);
     upsert(state.events, rec); finish(v._new ? `Created ${rec.name}` : `Saved ${rec.name}`, `${pct(rec.tasks.filter(t => t.done).length, rec.tasks.length)}% ready`);
+    if (added.length) afterSync(() => fnApi('push', 'event', {id:rec.id, added}).catch(() => {}));
   },
   idea(f, fd) {
     const id = f.dataset.id, prev = id ? state.ideas.find(x => x.id === id) : null, err = $('#ierr');
@@ -624,7 +627,9 @@ const FORMS = {
     if (!rec.title) { err.textContent = 'Give the idea a title.'; return; }
     if (rec.next && !rec.due) { err.textContent = 'Add a target date so the next step shows up in Deadlines.'; return; }
     if (prev && rec.stage === 'completed' && prev.stage !== 'completed') rec.previousStage = prev.stage;
+    const before = new Set(prev ? [prev.owner, ...prev.assigned] : []), added = [rec.owner, ...rec.assigned].filter(u => u && !before.has(u) && u !== me().id);
     upsert(state.ideas, rec); finish(prev ? 'Idea saved' : 'Idea submitted', rec.next ? 'next step added to Deadlines' : '');
+    if (added.length) afterSync(() => fnApi('push', 'idea', {id:rec.id, added}).catch(() => {}));
   },
   task(f, fd) {
     const owner = oversight() ? fd.get('owner') : me().id, title = fd.get('title').trim(), due = fd.get('due');

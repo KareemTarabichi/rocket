@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   const { data: auth } = await db.auth.getUser(jwt);
   if (!auth?.user) return json({ error: 'Your session has expired. Sign in again.' }, 401);
-  const { data: me } = await db.from('profiles').select('id, name, role, is_admin, active').eq('id', auth.user.id).single();
+  const { data: me } = await db.from('profiles').select('id, name, role, team, is_admin, active').eq('id', auth.user.id).single();
   if (!me?.active) return json({ error: 'Your access is turned off.' }, 403);
   const id = String(body.id ?? '');
 
@@ -116,6 +116,33 @@ Deno.serve(async (req) => {
       const { data: t } = await db.from('tasks').select('*').eq('id', id).maybeSingle();
       if (!t || t.owner === me.id) return json({ ok: true, sent: 0 });
       return json({ ok: true, sent: await sendTo([t.owner], { title: `New follow-up: ${t.title}`, body: `Due ${fmtDay(t.due)} · from ${me.name}`, url: `${SITE_URL}/?view=deadlines`, tag: `task-${t.id}` }) });
+    }
+    case 'idea': {   // people newly made owner or collaborator on an idea
+      const { data: i } = await db.from('ideas').select('title, owner, assigned, next_step').eq('id', id).maybeSingle();
+      if (!i) return json({ error: 'Idea not found.' }, 404);
+      const involved = [i.owner, ...(i.assigned ?? [])].filter(Boolean);
+      if (!OVERSIGHT.includes(me.role) && !involved.includes(me.id)) return json({ error: 'You can’t notify people about this idea.' }, 403);
+      const added = (Array.isArray(body.added) ? body.added : []).map(String).filter((u) => involved.includes(u) && u !== me.id);
+      const sent = await sendTo(added, { title: `${me.name} added you to an idea`, body: `${i.title}${i.next_step ? ` · next: ${i.next_step}` : ''}`, url: `${SITE_URL}/?view=ideas`, tag: `idea-${id}` });
+      return json({ ok: true, sent });
+    }
+    case 'event': {   // people newly assigned to an event or to one of its checklist items
+      const [{ data: e }, { data: reqs }] = await Promise.all([
+        db.from('events').select('name, date, team, assigned, created_by').eq('id', id).maybeSingle(),
+        db.from('event_requirements').select('title, owner, due').eq('event_id', id),
+      ]);
+      if (!e) return json({ error: 'Event not found.' }, 404);
+      if (!OVERSIGHT.includes(me.role) && e.created_by !== me.id && e.team !== me.team) return json({ error: 'You can’t notify people about this event.' }, 403);
+      const involved = new Set([...(e.assigned ?? []), ...(reqs ?? []).map((r) => r.owner)].filter(Boolean));
+      const added = [...new Set((Array.isArray(body.added) ? body.added : []).map(String))].filter((u) => involved.has(u) && u !== me.id);
+      let sent = 0;
+      for (const u of added) {   // each person hears about their own checklist items
+        const mine = (reqs ?? []).filter((r) => r.owner === u);
+        sent += await sendTo([u], { title: `${me.name} added you to ${e.name}`,
+          body: mine.length ? `${mine.length === 1 ? mine[0].title : `${mine.length} checklist items`} · first due ${fmtDay(mine.map((r) => r.due).sort()[0])}` : `Event on ${fmtDay(e.date)}`,
+          url: `${SITE_URL}/?view=events`, tag: `event-${id}-${u}` });
+      }
+      return json({ ok: true, sent });
     }
     case 'deletion-request': {   // someone asked to delete a startup → admins and the President
       const { data: s } = await db.from('startups').select('name, deletion_requested_by, deletion_reason').eq('id', id).maybeSingle();
