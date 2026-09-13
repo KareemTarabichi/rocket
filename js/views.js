@@ -10,7 +10,9 @@ const canSeeDrive = () => access('design') || ['design', 'media', 'pr'].includes
 const driveBtn = (cls = '') => state.settings?.designDriveUrl
   ? `<a class="btn ${cls}" href="${esc(state.settings.designDriveUrl)}" target="_blank" rel="noopener noreferrer">${ic('folder')}Design Drive${ic('ext')}</a>`
   : `<button type="button" class="btn ${cls}" data-act="drive-missing">${ic('folder')}Design Drive</button>`;
-const heading = (title, sub, actions = '') => `<div class="page-head"><div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="toolbar">${bellBtn('page-bell')}${actions}</div></div>`;
+const SEARCH_KEY = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘K' : 'Ctrl K';
+const searchBtn = (cls = '') => `<button type="button" class="btn search-btn ${cls}" data-act="search" aria-label="Search Rocket (${SEARCH_KEY})" title="Search (${SEARCH_KEY})">${ic('search')}<span class="kbd">${SEARCH_KEY}</span></button>`;
+const heading = (title, sub, actions = '') => `<div class="page-head"><div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="toolbar">${searchBtn('page-bell')}${bellBtn('page-bell')}${actions}</div></div>`;
 const badge = (cls, label) => `<span class="pill ${cls}">${esc(label)}</span>`;
 const ideaBadge = s => badge('st-' + s, IDEA_LABEL[s]);
 const designBadge = s => badge('ds-' + s, DESIGN_LABEL[s]);
@@ -28,8 +30,8 @@ const BRAND = `<div class="brand">${LOGO}<span class="brand-text"><span class="b
 const roleSelect = id => `<select class="input" id="${id}" data-change="role" aria-label="Demo role">${ROLES.map(r => opt(r.id, `${r.label} — ${state.members.find(m => m.role === r.id).name}`, state.role)).join('')}</select>`;
 
 /* ================= shell ================= */
-const TABS = ['overview', 'meetings', 'events', 'deadlines'];
-const FAB = {meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
+const TABS = ['overview', 'calendar', 'events', 'deadlines'];
+const FAB = {calendar:() => ['new-event','New event'], meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
   startups:() => ['new-startup','Add startup'], design:() => ['new-design','New request'], budget:() => ['new-expense','Add expense']};
 function renderShell() {
   const overdue = pending().filter(x => daysFrom(x.due) < 0).length;
@@ -45,7 +47,7 @@ function renderShell() {
       <div class="whoami role-sw"><label for="role-d">Demo role switcher</label>${roleSelect('role-d')}<span class="faint" style="font-size:11.5px">No sign-in in this demo. Pick a role to see its view. Tech is also the platform admin.</span></div>
       <div style="display:flex;gap:14px;padding:0 4px"><button class="linkbtn" data-act="reset">Reset demo data</button></div>`}
     </div>`;
-  $('#topbar').innerHTML = `${BRAND}${bellBtn()}<button class="me-btn" data-act="more" aria-label="Switch role and more sections">${avatar(me().id)}${esc(roleLabel(state.role))}</button>`;
+  $('#topbar').innerHTML = `${BRAND}<button type="button" class="btn bell top-search" data-act="search" aria-label="Search Rocket">${ic('search')}</button>${bellBtn()}<button class="me-btn" data-act="more" aria-label="Switch role and more sections">${avatar(me().id)}${esc(roleLabel(state.role))}</button>`;
   $('#tabbar').innerHTML = TABS.map(k => { const [, l, i] = SECTIONS.find(s => s[0] === k);
     return `<a href="#" data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ''}>${ic(i)}${k === 'overview' ? 'Home' : l}${k === 'deadlines' && overdue ? `<span class="badge">${overdue}</span>` : ''}</a>`; }).join('')
     + `<button data-act="more" ${TABS.includes(view) ? '' : 'aria-current="page"'}>${ic('more')}More</button>`;
@@ -105,7 +107,7 @@ function vOverview() {
     <section class="hero" style="min-height:0">
       <div class="thermal"></div><div class="grain"></div>
       <div><div class="hero-date">${dow}.${pad(now.getDate())}.${mon}</div><h1 class="tagline" id="tagline" aria-live="off">${taglineHtml()}</h1></div>
-      <div class="hero-summary">${overdue ? `<span class="hero-chip over"><b>${overdue}</b> overdue</span>` : ''}${um[0] ? `<span class="hero-chip">Next meeting: ${esc(um[0].title)} <b>${fmtDate(um[0].date, {day:'numeric', month:'short'})} ${fmtTime(um[0].start)}</b></span>` : ''}${bellBtn('page-bell')}</div>
+      <div class="hero-summary">${overdue ? `<span class="hero-chip over"><b>${overdue}</b> overdue</span>` : ''}${um[0] ? `<span class="hero-chip">Next meeting: ${esc(um[0].title)} <b>${fmtDate(um[0].date, {day:'numeric', month:'short'})} ${fmtTime(um[0].start)}</b></span>` : ''}${searchBtn('page-bell')}${bellBtn('page-bell')}</div>
     </section>
     <div class="sum-cards">
       ${card('sum-meetings', um.length, 'Upcoming meetings', oversight() ? 'All club meetings' : 'Meetings you’re invited to')}
@@ -272,5 +274,42 @@ function vDeadlines() {
     <div class="toolbar">${seg('dl-f', filters.deadlines, [['pending','Pending only'], ['all','All statuses']])}<span class="faint" style="font-size:13px">${oversight() ? 'Leadership view — every club item' : 'Items you own, plus idea next steps you collaborate on'}</span></div>
     ${grp('Overdue', g.Overdue)}${grp('Due Today', g['Due Today'])}${grp('Upcoming', g.Upcoming)}${showDone ? grp('Completed', g.Completed) : ''}
     ${all.filter(x => showDone || !x.done).length ? '' : '<div class="panel empty">Nothing here. Add a follow-up if something needs tracking.</div>'}
+  </div>`;
+}
+
+/* ================= calendar ================= */
+function calMonthStart(d) { const x = parseD(d); x.setDate(1); return ymd(x); }
+function vCalendar() {
+  const f = filters.cal; f.sel ||= today(); f.cursor ||= calMonthStart(f.sel);
+  const items = calItems(), byDay = {}; items.forEach(it => (byDay[it.date] ||= []).push(it));
+  const first = parseD(f.cursor), y = first.getFullYear(), mo = first.getMonth();
+  const lead = (first.getDay() + 6) % 7, days = new Date(y, mo + 1, 0).getDate(), weeks = Math.ceil((lead + days) / 7);
+  const cells = Array.from({length:weeks * 7}, (_, k) => ymd(new Date(y, mo, 1 - lead + k)));
+  const title = first.toLocaleDateString('en-GB', {month:'long', year:'numeric'});
+  const typeChips = `<div class="${isM() ? 'scroller' : 'filters'}">${CAL_TYPES.map(([k, l]) => `<button type="button" class="fchip cal-k k-${k}" data-act="cal-type" data-v="${k}" aria-pressed="${f.types[k]}"><i></i>${l}</button>`).join('')}
+    <button type="button" class="fchip" data-act="cal-mine" aria-pressed="${f.mine}">${oversight() ? 'Only mine' : 'Only mine'}</button></div>`;
+  const nav = `<div class="cal-nav"><button type="button" class="btn sm icon-btn" data-act="cal-month" data-v="-1" aria-label="Previous month">‹</button><h2>${title}</h2><button type="button" class="btn sm icon-btn" data-act="cal-month" data-v="1" aria-label="Next month">›</button><button type="button" class="btn sm" data-act="cal-today">Today</button></div>`;
+  const row = it => `<button type="button" class="cx-item k-${it.kind} ${it.done ? 'is-done' : ''}" data-act="${it.act}" data-id="${esc(it.id)}" data-v="${esc(it.id)}">
+      <span class="cx-bar"></span><span class="cx-when">${it.time ? fmtTime(it.time) : ({meeting:'Meeting', event:'Event', task:'Due', idea:'Next step', design:'Design'}[it.kind])}</span>
+      <span class="cx-text"><span class="cx-title">${esc(it.title)}</span><span class="cx-sub">${esc(it.sub)}</span></span>${it.due === 'over' ? '<span class="due over">Overdue</span>' : it.due === 'soon' ? '<span class="due soon">Due soon</span>' : it.done && it.kind !== 'event' && it.kind !== 'meeting' ? '<span class="due done">Done</span>' : ''}</button>`;
+  const dayList = byDay[f.sel] || [], upcoming = items.filter(it => it.date > f.sel && !it.done).slice(0, 8);
+  const agenda = `<div class="panel cx-agenda"><div class="panel-head"><h2>${fmtDate(f.sel, {weekday:'long', day:'numeric', month:'long'})}</h2><span class="faint num" style="font-size:12px">${dayList.length || 'Nothing'}${dayList.length ? '' : ' scheduled'}</span></div>
+      <div class="cx-list">${dayList.map(row).join('') || '<div class="empty">Nothing on this day.</div>'}</div>
+      ${upcoming.length ? `<div class="notif-sec">Coming up</div><div class="cx-list">${upcoming.map(it => row({...it, time:'', sub:`${fmtDate(it.date)} · ${it.sub}`})).join('')}</div>` : ''}</div>`;
+  let grid;
+  if (isM()) {
+    grid = `<div class="m-month">${['M','T','W','T','F','S','S'].map(d => `<div class="m-dow">${d}</div>`).join('')}${cells.map(d => { const its = byDay[d] || [], dt = parseD(d);
+      return `<button type="button" class="m-day ${dt.getMonth() !== mo ? 'out' : ''} ${d === today() ? 'today' : ''}" data-act="cal-sel" data-v="${d}" aria-pressed="${d === f.sel}" aria-label="${fmtDate(d, {weekday:'long', day:'numeric', month:'long'})}, ${its.length} item${its.length === 1 ? '' : 's'}"><span>${dt.getDate()}</span><span class="dots">${its.slice(0, 4).map(it => `<i class="cxd k-${it.kind}"></i>`).join('')}</span></button>`; }).join('')}</div>`;
+  } else {
+    grid = `<div class="cx-grid">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="cx-dow">${d}</div>`).join('')}${cells.map(d => { const its = byDay[d] || [], dt = parseD(d);
+      return `<div class="cx-cell ${dt.getMonth() !== mo ? 'out' : ''} ${d === today() ? 'today' : ''} ${d === f.sel ? 'sel' : ''}" data-act="cal-sel" data-v="${d}">
+        <span class="cx-n">${dt.getDate()}</span>
+        ${its.slice(0, 3).map(it => `<button type="button" class="cx-chip k-${it.kind} ${it.done ? 'is-done' : ''} ${it.due === 'over' ? 'is-over' : ''}" data-act="${it.act}" data-id="${esc(it.id)}" data-v="${esc(it.id)}" title="${esc(it.title)} — ${esc(it.sub)}">${it.time ? `<b>${fmtTime(it.time).replace(':00', '').replace(' ', '')}</b> ` : ''}${esc(it.title)}</button>`).join('')}
+        ${its.length > 3 ? `<span class="cx-more">+${its.length - 3} more</span>` : ''}</div>`; }).join('')}</div>`;
+  }
+  return `<div class="page">
+    ${heading('Calendar', 'Everything with a date in one place: meetings, events, checklist items, follow-ups, idea next steps and design deadlines.', `<button class="btn btn-primary" data-act="new-event">${ic('plus')}New event</button>`)}
+    ${typeChips}
+    <div class="cx-layout"><div class="cx-main">${nav}${grid}</div>${agenda}</div>
   </div>`;
 }

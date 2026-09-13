@@ -133,6 +133,12 @@ Later, if you connect your own email sender (Authentication → Emails → SMTP)
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.
 
+## Finding things
+
+- **Search** — press **⌘K** (Mac) or **Ctrl K** (Windows), or **/**, anywhere; on phones tap the search icon. It searches ideas (including contributions), events and their checklists, meetings you can see, follow-ups, people, guides, and — if your role has them — startups, design requests and budget items. Arrow keys + Enter to open.
+- **Calendar** — everything with a date: meetings, events, checklist items, follow-ups, idea next steps and design deadlines. Filter by type or "Only mine". It's the second tab on phones.
+- **History** — ideas, events and startups have **Show history**: who created it, changed which field from what to what, ticked checklist items, added contributions, asked to delete it. The database records this itself (`20260915000000_change_history.sql`), so it can't be skipped or edited. Startup history is only visible to people who can see the directory.
+
 ## Ideas
 
 - The person who submits an idea is its **owner** — locked for good. (If an owner is removed from Rocket, an admin can assign a new one.)

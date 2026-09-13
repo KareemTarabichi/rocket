@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.13-3';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.14-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -49,7 +49,9 @@ const ICON = {
   folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
-  chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/>'
+  chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  grid:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 17h.01M12 17h.01"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 const mq = window.matchMedia('(max-width: 760px)');
@@ -62,11 +64,11 @@ const ROLES = [
   {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'}];
 const roleLabel = r => ROLES.find(x => x.id === r)?.label || r;
 const OVERSIGHT = ['president', 'vp', 'advisor', 'ea'];
-const BASE_SECTIONS = ['overview', 'meetings', 'events', 'ideas', 'deadlines', 'kb'];
+const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'kb'];
 const OVERSIGHT_SECTIONS = ['startups', 'budget', 'design', 'members'];
 const EXTRA_SECTIONS = {treasurer:['budget'], startup:['startups'], pr:['design']};
 const SECTIONS = [
-  ['overview','Overview','home'], ['meetings','Meetings','cal'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'],
+  ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'],
   ['startups','Startup Directory','rocket'], ['budget','Budget','coins'], ['design','Design','image'], ['members','Members & teams','team'], ['kb','Knowledge Base','book'], ['admin','Admin','shield']];
 const sectionLabel = s => SECTIONS.find(x => x[0] === s)?.[1] || s;
 const TEAMS = [
@@ -204,6 +206,17 @@ function initDemoState() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
   ensureLinks(); state.ideaComments ||= [];
+  if (!state.changeLog) {   // a little example history for the demo
+    const at = h => new Date(Date.now() - h * 36e5).toISOString(), E = (entity_type, entity_id, actor, h, action, subject, changes = {}) => ({id:h, entity_type, entity_id, actor, action, subject, changes, created_at:at(h)});
+    state.changeLog = [
+      E('idea', 'i2', 'm9', 3, 'updated', 'Launchpad podcast', {stage:['submitted', 'review']}),
+      E('idea', 'i2', 'm9', 30, 'updated', 'Launchpad podcast', {assigned:[[], ['m7']]}),
+      E('idea', 'i2', 'm9', 48, 'created', 'Launchpad podcast'),
+      E('event', 'ev_ignite', 'm4', 5, 'requirement updated', 'Venue request to Student Affairs', {due:[addDays(today(), -2), today()]}),
+      E('event', 'ev_ignite', 'm1', 26, 'updated', 'Ignite', {location:['TBC', 'Main Plaza']}),
+      E('event', 'ev_rise', 'm6', 8, 'requirement updated', 'Invite list sent to founders', {done:[false, true]}),
+      E('startup', 's1', 'm6', 12, 'updated', state.startups[0]?.name || '', {sector:['', state.startups[0]?.sector || 'Edtech']})];
+  }
 }
 let view = 'overview';
 let draft = null;          // record being edited in the open dialog
@@ -212,7 +225,8 @@ const filters = {
   meetings:'upcoming', events:'mine', deadlines:'pending',
   ideas:{team:'all', owner:'all', stage:'all', scope:'all'}, ideaStageM:'progress',
   startups:{q:'', sector:'all', att:'all', missing:false, view:'table'},
-  design:'open', kb:''
+  design:'open', kb:'',
+  cal:{cursor:null, sel:null, mine:false, types:{meeting:true, event:true, task:true, idea:true, design:true}}
 };
 function save() {
   if (LIVE) return queueSync();   // live.js writes the changed records to Supabase
@@ -424,4 +438,35 @@ function mdToHtml(md) {
   }
   flushPara(); flushList();
   return out.join('');
+}
+
+/* ================= calendar: everything with a date ================= */
+const CAL_TYPES = [['meeting', 'Meetings'], ['event', 'Events'], ['task', 'Tasks & checklists'], ['idea', 'Idea next steps'], ['design', 'Design due']];
+function calItems() {
+  const f = filters.cal, meId = me().id, items = [];
+  if (f.types.meeting) visibleMeetings().forEach(m => { if (f.mine && !recipients(m).includes(meId)) return;
+    items.push({kind:'meeting', date:m.date, time:m.start, title:m.title, sub:`${fmtTime(m.start)}–${fmtTime(m.end)} · ${m.location}`, act:'open-meeting', id:m.id, done:meetingEnded(m)}); });
+  if (f.types.event) state.events.forEach(e => { if (f.mine && !relevantEvent(e).length) return;
+    items.push({kind:'event', date:e.date, title:e.name, sub:`${e.location || 'Location TBC'} · ${teamName(e.team)} team`, act:'open-event', id:e.id, done:daysFrom(e.date) < 0}); });
+  deadlineItems().forEach(x => {
+    const kind = x.src === 'idea' ? 'idea' : x.src === 'design' ? 'design' : 'task';
+    if (!f.types[kind] || (f.mine && !x.owners.includes(meId))) return;
+    const n = daysFrom(x.due);
+    items.push({kind, date:x.due, title:x.title, sub:`${x.srcLabel} · ${x.related} · ${member(x.owner)?.name || 'Unassigned'}`, done:x.done, due:x.done ? 'done' : n < 0 ? 'over' : n <= 1 ? 'soon' : '',
+      act:x.src === 'req' ? 'open-event' : x.src === 'idea' ? 'open-idea' : x.src === 'design' ? 'open-design' : 'go', id:x.src === 'req' ? x.eventId : x.src === 'task' ? 'deadlines' : x.id});
+  });
+  return items.sort((a, b) => (a.date + (a.time || '00:00')).localeCompare(b.date + (b.time || '00:00')));
+}
+
+/* ================= change history (demo mode records it here; live mode's database does it) ================= */
+function recordChange(type, id, action, subject, changes = {}) {
+  if (LIVE || !state) return;
+  (state.changeLog ||= []).unshift({id:Date.now() + Math.random(), entity_type:type, entity_id:id, actor:me().id, action, subject:subject || '', changes, created_at:new Date().toISOString()});
+  state.changeLog = state.changeLog.slice(0, 500);
+}
+// {field: [old, new]} for the fields that differ
+function diffFields(before, after, keys) {
+  const out = {};
+  keys.forEach(k => { const a = before?.[k] ?? null, b = after?.[k] ?? null; if (JSON.stringify(a) !== JSON.stringify(b)) out[k] = [a, b]; });
+  return out;
 }

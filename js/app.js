@@ -86,6 +86,7 @@ function openEvent(id) {
         return `<div class="req-view ${t.done ? 'done' : ''}"><input type="checkbox" data-change="req-done" data-ev="${ev.id}" data-id="${t.id}" ${t.done ? 'checked' : ''} ${own ? '' : 'disabled'} aria-label="Complete ${esc(t.title)}"><span class="t">${esc(t.title)}</span><span class="own team-lbl">${esc(member(t.owner)?.name)}</span>
           <span class="due-ctl">${own ? `<input class="input" type="date" value="${t.due}" data-change="req-due" data-ev="${ev.id}" data-id="${t.id}" aria-label="Due date">` : `<span class="dd num faint" style="font-size:12.5px">${fmtDate(t.due)}</span>`}</span></div>`; }).join('') || '<span class="faint">No requirements yet.</span>'}</div>
       ${designs.length ? `<div class="sect"><span class="eyebrow">Design work</span>${designs.map(d => `<div class="req-view"><span></span><span class="t">${esc(d.title)}</span><span class="own team-lbl">${esc(member(d.owner)?.name)}</span>${canDesignStatus(d) ? `<button type="button" class="btn sm" data-act="open-design" data-id="${d.id}">${designBadge(d.status)}</button>` : designBadge(d.status)}</div>`).join('')}</div>` : ''}
+      ${historyBox('event', ev.id)}
     </div>${foot('')}`);
 }
 function renderEventForm() {
@@ -106,6 +107,7 @@ function renderEventForm() {
         <div><button type="button" class="btn sm" data-act="req-add">${ic('plus')}Add requirement</button></div></div>
       ${designs.length ? `<div class="sect"><span class="eyebrow">Design work for this event</span>${designs.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>${esc(d.title)} <span class="faint">· ${esc(member(d.owner)?.name)}</span></span>${designBadge(d.status)}</div>`).join('')}</div>` : ''}
       <span class="err" id="eerr" role="alert"></span>
+      ${isNew ? '' : historyBox('event', v.id)}
     </div>${foot(`<button class="btn btn-primary">${isNew ? 'Create event' : 'Save event'}</button>`)}
   </form>`;
   const keep = dlg().open ? dlg().scrollTop : 0;
@@ -122,7 +124,7 @@ function openIdea(id) {
       <div class="dlg-body">${readonlyNote(canCommentIdea(i) ? 'You can add contributions below.' : 'Read-only. The owner, collaborators and leadership can edit this idea.')}
         ${i.description ? `<p class="prose">${esc(i.description)}</p>` : ''}
         <dl class="kv"><dt>Collaborators</dt><dd>${i.assigned.map(a => esc(member(a)?.name)).join(', ') || '—'}</dd><dt>Next step</dt><dd>${esc(i.next || '—')}</dd><dt>Target date</dt><dd>${fmtDateY(i.due)}</dd><dt>Notes</dt><dd style="white-space:pre-wrap">${esc(i.notes || '—')}</dd></dl>
-        ${ideaThread(i)}</div>${foot('')}`);
+        ${ideaThread(i)}${historyBox('idea', i.id)}</div>${foot('')}`);
     return;
   }
   const v = i || {title:'', description:'', team:me().team, owner:me().id, assigned:[], stage:'submitted', notes:'', next:'', due:addDays(today(), 14)};
@@ -139,7 +141,7 @@ function openIdea(id) {
       <div class="grid2">${field('Next step', inp('next', v.next, 'placeholder="e.g. Draft a one-page format"'), 'f-next')}${field('Target date', inp('due', v.due, 'type="date"'), 'f-due')}</div>
       ${field('Notes', txt('notes', v.notes, 2), 'f-notes')}
       <span class="err" id="ierr" role="alert"></span>
-      ${i ? ideaThread(i) : ''}
+      ${i ? ideaThread(i) + historyBox('idea', i.id) : ''}
     </div>
     ${foot(`<button class="btn btn-primary">${i ? 'Save idea' : 'Submit idea'}</button>`, i && canDeleteIdea(i) ? `<button type="button" class="btn btn-del" data-act="del-idea" data-id="${i.id}">${ic('trash')}Delete idea</button>` : '')}
   </form>`);
@@ -232,6 +234,7 @@ function renderStartupForm() {
       <div class="field"><span class="lbl">Previous events attended</span><div class="checks">${PAST_EVENTS.map(e => `<label class="cbox"><input type="checkbox" data-att="${esc(e)}" ${v.attendance.includes(e) ? 'checked' : ''}>${esc(e)}</label>`).join('')}</div></div>
       ${field('Notes', `<textarea class="input" id="f-snotes" data-d="notes" rows="4">${esc(v.notes)}</textarea>`, 'f-snotes')}
       ${v.rating != null ? `<span class="muted-note">Overall rating from the sheet: ${v.rating}/10</span>` : ''}
+      ${v._new ? '' : historyBox('startup', v.id)}
     </div>${foot(`<button class="btn btn-primary">${v._new ? 'Add startup' : 'Save startup'}</button>`, delBtn)}</form>`);
   dlg().scrollTop = keep;
 }
@@ -247,6 +250,7 @@ function openDeletionRequest(id) {
 }
 function setStartupDeletion(id, value) {
   const s = state.startups.find(x => x.id === id); if (!s) return null;
+  recordChange('startup', id, 'updated', s.name, {deletion_requested_at:[s.deletion?.at || null, value?.at || null]});
   s.deletion = value;
   if (draft && draft.id === id) { draft.deletion = value; if (dlg().open && $('form[data-form="startup"]')) renderStartupForm(); }
   save(); render();
@@ -429,6 +433,114 @@ function toast(msg, sub, warn) {
   $('#toasts').appendChild(t); setTimeout(() => t.remove(), 3800);
 }
 
+/* ================= change history panel ================= */
+const historyBox = (type, id) => `<div class="sect hist" id="hist-box" data-type="${type}" data-id="${esc(id)}"><button type="button" class="btn sm btn-ghost" data-act="load-history" data-type="${type}" data-id="${esc(id)}">${ic('clock')}Show history</button></div>`;
+async function loadHistory(type, id) {
+  const box = document.getElementById('hist-box'); if (!box) return;
+  box.innerHTML = '<span class="eyebrow">History</span><span class="faint" style="font-size:13px">Loading…</span>';
+  let rows = [];
+  try {
+    if (LIVE) { const {data, error} = await sb.from('change_log').select('*').eq('entity_type', type).eq('entity_id', id).order('created_at', {ascending:false}).limit(60); if (error) throw error; rows = data; }
+    else rows = (state.changeLog || []).filter(e => e.entity_type === type && e.entity_id === id);
+  } catch (e) { box.innerHTML = `<span class="eyebrow">History</span><span class="err">Couldn’t load the history: ${esc(e.message)}</span>`; return; }
+  if (box.dataset.id !== id) return;
+  box.innerHTML = `<span class="eyebrow">History · ${rows.length}${rows.length === 60 ? '+' : ''}</span>${rows.length ? `<ol class="hist-list">${rows.map(e => `<li>${avatar(e.actor)}<div><div><b>${esc(member(e.actor)?.name || (e.actor ? 'Former member' : 'Rocket'))}</b> ${describeChange(e)}</div><time>${fmtStamp(e.created_at)}</time></div></li>`).join('')}</ol>` : '<span class="faint" style="font-size:13px">No changes recorded yet. History starts from when it was switched on.</span>'}`;
+}
+const LONG_FIELDS = ['description', 'notes', 'brief', 'contacts', 'agenda', 'body'];
+const HIDDEN_FIELDS = ['id', 'previous_stage', 'previousStage', 'created_by', 'createdBy', 'deletion_requested_by', 'deletion_reason', 'event_id', 'idea_id', 'position'];
+const FIELD_LABEL = {title:'the title', name:'the name', description:'the description', notes:'the notes', next:'the next step', next_step:'the next step', due:'the target date', stage:'the stage',
+  team:'the team', owner:'the owner', assigned:'the people involved', date:'the date', location:'the location', sector:'the sector', attendance:'events attended', contacts:'the contacts', rating:'the rating'};
+function histVal(k, v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (k === 'stage') return IDEA_LABEL[v] || v;
+  if (k === 'team') return teamName(v);
+  if (k === 'owner') return member(v)?.name || 'a former member';
+  if (k === 'due' || k === 'date') return fmtDateY(String(v).slice(0, 10));
+  return String(v);
+}
+function describeChange(e) {
+  const s = e.subject ? `“${esc(e.subject)}”` : '', ch = e.changes || {};
+  switch (e.action) {
+    case 'created': return 'created it';
+    case 'deleted': return 'deleted it';
+    case 'contribution created': return `added a contribution${s ? ` ${s}` : ''}`;
+    case 'contribution deleted': return 'removed a contribution';
+    case 'requirement created': return `added the checklist item ${s}`;
+    case 'requirement deleted': return `removed the checklist item ${s}`;
+    case 'requirement updated': {
+      if (ch.done) return `${ch.done[1] ? 'ticked off' : 'reopened'} ${s}`;
+      const bits = [];
+      if (ch.owner) bits.push(`assigned ${s} to ${esc(histVal('owner', ch.owner[1]))}`);
+      if (ch.due) bits.push(`moved ${s} to ${esc(histVal('due', ch.due[1]))}`);
+      if (ch.title) bits.push(`renamed “${esc(ch.title[0])}” to “${esc(ch.title[1])}”`);
+      return bits.join(', ') || `edited ${s}`;
+    }
+  }
+  const bits = [];
+  for (const [k, [a, b]] of Object.entries(ch)) {
+    if (k === 'deletion_requested_at') { bits.push(b ? 'asked to delete it' : 'cleared the deletion request'); continue; }
+    if (HIDDEN_FIELDS.includes(k)) continue;
+    const label = FIELD_LABEL[k] || k.replace(/_/g, ' ');
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const A = a || [], B = b || [], plus = B.filter(x => !A.includes(x)), minus = A.filter(x => !B.includes(x));
+      const nm = x => k === 'assigned' ? (member(x)?.name?.split(' ')[0] || 'someone') : x;
+      if (k === 'contacts') { bits.push('edited the contacts'); continue; }
+      if (plus.length) bits.push(`added ${esc(plus.map(nm).join(', '))} to ${label}`);
+      if (minus.length) bits.push(`removed ${esc(minus.map(nm).join(', '))} from ${label}`);
+      continue;
+    }
+    if (LONG_FIELDS.includes(k)) { bits.push(`edited ${label}`); continue; }
+    bits.push(`changed ${label} from <span class="hist-v">${esc(histVal(k, a))}</span> to <span class="hist-v">${esc(histVal(k, b))}</span>`);
+  }
+  return bits.join('; ') || 'made a change';
+}
+
+/* ================= search (⌘K / Ctrl K / "/") ================= */
+let searchSel = 0;
+function openSearch() {
+  if (!state) return;
+  openDialog(`<div class="search-head">${ic('search')}<input class="input" id="search-q" data-input="search-q" type="search" autocomplete="off" placeholder="Search ideas, events, meetings, startups, people, guides…" aria-label="Search Rocket"><span class="kbd">esc</span></div><div id="search-results" class="search-results" role="listbox"></div>`, 'search-pop');
+  renderSearch('');
+  setTimeout(() => $('#search-q')?.focus());
+}
+function searchIndex() {
+  const out = [], add = (type, a, id, title, sub, text, v) => out.push({type, a, id, v, title, sub, text:`${title} ${sub} ${text || ''}`.toLowerCase()});
+  SECTIONS.filter(s => access(s[0])).forEach(([k, l]) => add('Go to', 'go', k, l, 'Section', '', k));
+  state.ideas.forEach(i => add('Idea', 'open-idea', i.id, i.title, `${IDEA_LABEL[i.stage]} · ${teamName(i.team)} · ${member(i.owner)?.name || ''}`, [i.description, i.notes, i.next, ...commentsFor(i.id).map(c => `${c.title} ${c.body}`)].join(' ')));
+  state.events.forEach(e => add('Event', 'open-event', e.id, e.name, `${fmtDate(e.date)} · ${e.location || 'TBC'}`, [e.description, ...e.tasks.map(t => t.title)].join(' ')));
+  visibleMeetings().forEach(m => add('Meeting', 'open-meeting', m.id, m.title, `${fmtDate(m.date)} · ${fmtTime(m.start)} · ${m.location}`, m.agenda));
+  deadlineItems().filter(x => x.src === 'task').forEach(x => add('Follow-up', 'go', x.id, x.title, `${x.related} · ${member(x.owner)?.name || ''} · ${x.done ? 'done' : relDue(x.due)}`, '', 'deadlines'));
+  if (access('startups')) state.startups.forEach(s => add('Startup', 'open-startup', s.id, s.name, s.sector || '', [s.notes, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ')));
+  state.designs.filter(d => access('design') || d.owner === me().id).forEach(d => add('Design', 'open-design', d.id, d.title, `${DESIGN_LABEL[d.status]} · ${member(d.owner)?.name || ''}`, [d.brief, d.deliverables, d.campaign].join(' ')));
+  state.members.filter(m => m.active !== false).forEach(m => add('Person', 'edit-member', m.id, m.name, `${roleLabel(m.role)} · ${teamName(m.team)}`, m.email));
+  (state.kb || []).forEach(a => add('Guide', 'open-kb', a.id, a.title, a.category, `${a.summary} ${a.body}`));
+  if (access('budget')) { state.budget.expenses.forEach(x => add('Expense', 'edit-expense', x.id, x.name, `${aed(x.actual || x.planned)} · ${eventById(x.event)?.name || ''}`, x.receipt));
+    state.budget.reimbursements.forEach(x => add('Reimbursement', 'edit-reimb', x.id, x.name, `${aed(x.amount)} · ${x.status} · ${member(x.member)?.name || ''}`, x.receipt)); }
+  return out;
+}
+function renderSearch(q) {
+  const box = $('#search-results'); if (!box) return;
+  const words = q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  let hits;
+  if (!words.length) hits = searchIndex().filter(h => h.type === 'Go to');
+  else hits = searchIndex().filter(h => words.every(w => h.text.includes(w))).map(h => {
+      const t = h.title.toLowerCase(); return {...h, score:(t.startsWith(words[0]) ? 0 : words.every(w => t.includes(w)) ? 1 : 2) + (h.type === 'Go to' ? 0.5 : 0)}; })
+    .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title)).slice(0, 40);
+  const mark = s => { let h = esc(s); words.forEach(w => { const re = new RegExp(`(${esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'); h = h.replace(re, '<mark>$1</mark>'); }); return h; };
+  searchSel = 0;
+  box.innerHTML = hits.length ? hits.map((h, k) => `<button type="button" class="sr-item ${k === 0 ? 'active' : ''}" role="option" data-act="search-go" data-a="${h.a}" data-id="${esc(h.id)}" data-v="${esc(h.v || h.id)}">
+      <span class="sr-type">${esc(h.type)}</span><span class="sr-text"><span class="sr-title">${mark(h.title)}</span><span class="sr-sub">${esc(h.sub)}</span></span></button>`).join('')
+    : `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
+  if (!words.length) box.insertAdjacentHTML('afterbegin', '<div class="notif-sec">Jump to</div>');
+}
+function searchKey(key) {
+  const items = [...document.querySelectorAll('#search-results .sr-item')]; if (!items.length) return;
+  if (key === 'Enter') return items[searchSel]?.click();
+  items[searchSel]?.classList.remove('active');
+  searchSel = (searchSel + (key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+  items[searchSel].classList.add('active'); items[searchSel].scrollIntoView({block:'nearest'});
+}
+
 /* ================= launch parameters =================
    ?view=meetings opens a section (used by notification taps); ?calendar=connected|error comes back from Google. */
 function handleLaunchParams() {
@@ -441,7 +553,7 @@ function handleLaunchParams() {
 }
 
 /* ================= navigation & render ================= */
-const VIEWS = {overview:vOverview, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
+const VIEWS = {overview:vOverview, calendar:vCalendar, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
 function go(v) {
   if (!access(v)) { toast(`${roleLabel(state.role)} doesn’t include ${sectionLabel(v)}`, '', true); return; }
   view = v; closeDialog(); render(); window.scrollTo(0, 0);
@@ -551,10 +663,19 @@ const ACT = {
     const title = ($('#ic-title')?.value || '').trim(), body = ($('#ic-body')?.value || '').trim();
     if (!body) { $('#ic-body')?.focus(); return toast('Write your contribution first', '', true); }
     const c = {id:uid('ic'), ideaId:i.id, author:me().id, title:title.slice(0, 120), body:body.slice(0, 4000), at:new Date().toISOString()};
-    state.ideaComments.push(c); save(); refreshIdeaThread(i.id); render(); toast('Contribution added', i.title);
+    state.ideaComments.push(c); recordChange('idea', i.id, 'contribution created', c.title || c.body.slice(0, 60)); save(); refreshIdeaThread(i.id); render(); toast('Contribution added', i.title);
     afterSync(() => fnApi('push', 'idea-comment', {id:c.id}).catch(() => {}));
   },
   'idea-comment-del': el => requestDeletion('comment', el.dataset.id),
+  'cal-month': el => { const d = parseD(filters.cal.cursor || calMonthStart(today())); d.setMonth(d.getMonth() + (+el.dataset.v)); filters.cal.cursor = ymd(d);
+    filters.cal.sel = filters.cal.cursor.slice(0, 7) === today().slice(0, 7) ? today() : filters.cal.cursor; render(); },
+  'cal-today': () => { filters.cal.sel = today(); filters.cal.cursor = calMonthStart(today()); render(); },
+  'cal-sel': el => { filters.cal.sel = el.dataset.v; if (el.dataset.v.slice(0, 7) !== (filters.cal.cursor || '').slice(0, 7)) filters.cal.cursor = calMonthStart(el.dataset.v); render(); },
+  'cal-type': el => { const t = filters.cal.types; t[el.dataset.v] = !t[el.dataset.v]; render(); },
+  'cal-mine': () => { filters.cal.mine = !filters.cal.mine; render(); },
+  search: () => openSearch(),
+  'search-go': el => { const a = el.dataset.a; closeDialog(); if (a === 'go') return go(el.dataset.v); ACT[a]?.({dataset:{id:el.dataset.id, v:el.dataset.v}}); },
+  'load-history': el => loadHistory(el.dataset.type, el.dataset.id),
   'admin-tab': el => { adminTab = el.dataset.v; if (adminTab === 'links') adminData.calendar = null; render(); },
   'admin-links': () => { adminTab = 'links'; adminData.calendar = null; go('admin'); },
   'link-row-add': () => { $('#custom-links').insertAdjacentHTML('beforeend', customRow()); $('#custom-links .custom-row:last-child [data-cl]').focus(); },
@@ -589,6 +710,9 @@ document.addEventListener('click', e => {
   ACT[el.dataset.act]?.(el, e);
 });
 document.addEventListener('keydown', e => {
+  const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
+  if (state && !document.body.classList.contains('is-login') && (((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing && !dlg().open))) { e.preventDefault(); openSearch(); return; }
+  if (e.target.id === 'search-q' && ['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) { e.preventDefault(); searchKey(e.key); return; }
   if (e.key === 'Enter' && e.target.matches('.mt-row, .idea-card, tbody tr, .nitem.click')) e.target.click();
   if (e.key === 'Enter' && e.target.id === 'ic-title') { e.preventDefault(); $('#ic-body')?.focus(); }   // don't submit the idea form
 });
@@ -597,7 +721,7 @@ const CHANGE = {
   role: el => switchRole(el.value),
   complete: el => { if (completeItem(el.dataset.key, el.checked)) { render(); toast(el.checked ? 'Marked done' : 'Reopened', findItem(el.dataset.key)?.title); } else render(); },
   'idea-stage': el => { const i = state.ideas.find(x => x.id === el.dataset.id); if (!canIdea(i)) { toast('You can’t change this idea', '', true); return render(); }
-    if (el.value === 'completed' && i.stage !== 'completed') i.previousStage = i.stage; i.stage = el.value; save(); render(); toast(`${i.title} → ${IDEA_LABEL[i.stage]}`); },
+    if (el.value === 'completed' && i.stage !== 'completed') i.previousStage = i.stage; recordChange('idea', i.id, 'updated', i.title, {stage:[i.stage, el.value]}); i.stage = el.value; save(); render(); toast(`${i.title} → ${IDEA_LABEL[i.stage]}`); },
   'idea-team': el => { filters.ideas.team = el.value; render(); }, 'idea-owner': el => { filters.ideas.owner = el.value; render(); },
   'idea-stage-f': el => { filters.ideas.stage = el.value; render(); }, 'idea-scope': el => { filters.ideas.scope = el.value; render(); },
   'st-sector': el => { filters.startups.sector = el.value; render(); }, 'st-att': el => { filters.startups.att = el.value; render(); }, 'st-missing': el => { filters.startups.missing = el.checked; render(); },
@@ -631,6 +755,7 @@ function syncDraft(el) {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.input === 'st-q') { filters.startups.q = el.value; $('#st-results').innerHTML = startupResults(); const c = $('#st-count'); if (c) c.textContent = filteredStartups().length + ' shown'; return; }
+  if (el.dataset.input === 'search-q') { renderSearch(el.value); return; }
   if (el.dataset.input === 'kb-q') { filters.kb = el.value; $('#kb-results').innerHTML = kbResults(); return; }
   if (el.name === 'overall' || el.name?.startsWith('al_')) allocSum();
   if (el.type !== 'checkbox' && el.type !== 'radio') syncDraft(el);
@@ -666,6 +791,10 @@ const FORMS = {
     const rec = {...v, name:v.name.trim()}; delete rec._new;
     const people = e => new Set([...(e?.assigned || []), ...(e?.tasks || []).map(t => t.owner)].filter(Boolean));
     const before = people(existing), added = [...people(rec)].filter(u => !before.has(u) && u !== me().id);
+    recordChange('event', rec.id, existing ? 'updated' : 'created', rec.name, existing ? diffFields(existing, rec, ['name', 'description', 'date', 'location', 'team', 'assigned']) : {});
+    if (existing) { const old = new Map(existing.tasks.map(r => [r.id, r]));
+      rec.tasks.forEach(r => { const o = old.get(r.id); if (!o) recordChange('event', rec.id, 'requirement created', r.title); else { const d = diffFields(o, r, ['title', 'owner', 'due', 'done']); if (Object.keys(d).length) recordChange('event', rec.id, 'requirement updated', r.title, d); } old.delete(r.id); });
+      old.forEach(r => recordChange('event', rec.id, 'requirement deleted', r.title)); }
     upsert(state.events, rec); finish(v._new ? `Created ${rec.name}` : `Saved ${rec.name}`, `${pct(rec.tasks.filter(t => t.done).length, rec.tasks.length)}% ready`);
     if (added.length) afterSync(() => fnApi('push', 'event', {id:rec.id, added}).catch(() => {}));
   },
@@ -678,6 +807,7 @@ const FORMS = {
     if (rec.next && !rec.due) { err.textContent = 'Add a target date so the next step shows up in Deadlines.'; return; }
     if (prev && rec.stage === 'completed' && prev.stage !== 'completed') rec.previousStage = prev.stage;
     const before = new Set(prev ? [prev.owner, ...prev.assigned] : []), added = [rec.owner, ...rec.assigned].filter(u => u && !before.has(u) && u !== me().id);
+    recordChange('idea', rec.id, prev ? 'updated' : 'created', rec.title, prev ? diffFields(prev, rec, ['title', 'description', 'team', 'owner', 'assigned', 'stage', 'notes', 'next', 'due']) : {});
     upsert(state.ideas, rec); finish(prev ? 'Idea saved' : 'Idea submitted', rec.next ? 'next step added to Deadlines' : '');
     if (added.length) afterSync(() => fnApi('push', 'idea', {id:rec.id, added}).catch(() => {}));
   },
@@ -704,6 +834,8 @@ const FORMS = {
     const v = draft; if (!v.name.trim()) return toast('Give the startup a name', '', true);
     if (!v.contacts.some(c => c.primary)) v.contacts[0].primary = true;
     const rec = {...v, name:v.name.trim()}; delete rec._new;
+    const prevS = state.startups.find(x => x.id === rec.id);
+    recordChange('startup', rec.id, prevS ? 'updated' : 'created', rec.name, prevS ? diffFields(prevS, rec, ['name', 'sector', 'notes', 'attendance', 'contacts']) : {});
     upsert(state.startups, rec); finish(v._new ? 'Startup added' : 'Startup saved', missingContact(rec) ? 'contact details still missing' : '');
   },
   alloc(f, fd) {
