@@ -158,3 +158,34 @@ async function installNow() {
   if (outcome === 'accepted' && welcome) { welcome.step = 'notify'; renderWelcome(); }
   else if (welcome) renderWelcome();
 }
+
+/* ---- stay on the latest version ----
+   An installed app (or a tab left open) keeps running the code it started with. When Rocket comes back to
+   the foreground, compare the server's fingerprints (ETags) of its files with the ones it loaded; if a new
+   version was deployed, reload — straight away if nothing is open, otherwise offer it. */
+const BUILD_FILES = ['/js/core.js', '/js/views.js', '/js/views-more.js', '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/app.js', '/styles.css', '/config.js'];
+let bootBuild = null, lastBuildCheck = 0;
+async function buildFingerprint() {
+  if (!/^https?:$/.test(location.protocol)) return null;
+  try {
+    const tags = await Promise.all(BUILD_FILES.map(f => fetch(f, {method:'HEAD', cache:'no-store'}).then(r => r.ok ? (r.headers.get('etag') || r.headers.get('last-modified') || '') : '')));
+    return tags.every(t => !t) ? null : tags.join('|');
+  } catch (e) { return null; }
+}
+async function checkForUpdate() {
+  if (!bootBuild || Date.now() - lastBuildCheck < 60_000) return;
+  lastBuildCheck = Date.now();
+  const now = await buildFingerprint();
+  if (!now || now === bootBuild) return;
+  const busy = dlg().open || document.getElementById('confirm')?.open || welcome || (typeof PTR !== 'undefined' && PTR.busy) || document.body.classList.contains('is-login') && $('#l-pass')?.value;
+  if (!busy) { location.reload(); return; }
+  bootBuild = now;   // don't nag repeatedly
+  toast('Rocket was updated', 'reload to get the new version');
+  const t = $('#toasts').lastElementChild;
+  if (t) { t.style.pointerEvents = 'auto'; t.insertAdjacentHTML('beforeend', '<button type="button" class="btn sm" onclick="location.reload()" style="margin-left:8px">Reload</button>'); }
+}
+if (LIVE) {
+  buildFingerprint().then(v => { bootBuild = v; });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+  window.addEventListener('focus', checkForUpdate);
+}
