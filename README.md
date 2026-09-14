@@ -139,6 +139,13 @@ Admin is a platform permission on top of a club role. It does **not** grant club
 - **Calendar** — everything with a date: meetings, events, checklist items, follow-ups, idea next steps and design deadlines. Filter by type or "Only mine". It's the second tab on phones.
 - **History** — ideas, events and startups have **Show history**: who created it, changed which field from what to what, ticked checklist items, added contributions, asked to delete it. The database records this itself (`20260915000000_change_history.sql`), so it can't be skipped or edited. Startup history is only visible to people who can see the directory.
 
+## Notes
+
+- **Notes** (sidebar, or More on phones) — rich text with bold/italic/underline/strikethrough, headings, bulleted and numbered lists, **tickable checklists**, quotes, code, links and dividers. Autosaves as you type (⌘S saves immediately). Search, pin to top, and filter by All / Mine / Shared / Club.
+- **Private by default.** The owner shares with specific people (**can edit** / **can view**) or with the whole club (view or edit). Only the owner changes sharing; only the owner or an admin deletes. People get a notification when a note is shared with them.
+- **Together:** other people's saves appear live, and you can see who else has the note open. Saves are versioned — if two people save over each other, Rocket asks which version to keep instead of silently losing one.
+- Setup: run `20260916000000_notes.sql` (it also turns on live updates for notes) and redeploy the `push` function.
+
 ## Ideas
 
 - The person who submits an idea is its **owner** — locked for good. (If an owner is removed from Rocket, an admin can assign a new one.)

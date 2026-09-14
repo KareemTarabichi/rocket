@@ -381,18 +381,19 @@ function openNotifications() {
 }
 
 /* ================= deletion ================= */
-const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb, comment:state.ideaComments}[kind] || adminData.members || state.members).find(x => x.id === id);
-const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the idea’s owner or an admin can delete it', comment:'Only its author, the idea owner or an admin can delete this'};
+const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb, comment:state.ideaComments, note:state.notes}[kind] || adminData.members || state.members).find(x => x.id === id);
+const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the idea’s owner or an admin can delete it', comment:'Only its author, the idea owner or an admin can delete this', note:'Only the note’s owner or an admin can delete it'};
 function requestDeletion(kind, id) {
   const rec = deletionRecord(kind, id);
   if (!deletable(kind, rec)) { toast(DENY[kind], '', true); return; }
   pendingDeletion = {kind, id};
-  const name = kind === 'member' || kind === 'startup' ? rec.name : kind === 'comment' ? (rec.title || 'this contribution') : rec.title;
+  const name = kind === 'member' || kind === 'startup' ? rec.name : kind === 'comment' ? (rec.title || 'this contribution') : kind === 'note' ? noteTitle(rec) : rec.title;
   const consequence = kind === 'meeting'
     ? `A cancellation notice goes to its ${recipients(rec).length} current attendees${state.calendar.connected ? ' and the calendar entry is cancelled (simulated)' : ''}. Past notifications stay in the log.`
     : kind === 'startup' ? `Its contacts, notes and attendance history are deleted for everyone.${rec.deletion ? ` Requested by ${member(rec.deletion.by)?.name || 'a member'}${rec.deletion.reason ? `: “${rec.deletion.reason}”` : ''}.` : ''}`
     : kind === 'kb' ? 'The article disappears for everyone. Any images uploaded for it stay in storage.'
     : kind === 'comment' ? `${member(rec.author)?.name || 'This'} contribution is removed from the idea for everyone.`
+    : kind === 'note' ? `The note is deleted for you${rec.editors.length || rec.viewers.length || rec.club_access !== 'none' ? ' and everyone it’s shared with' : ''}.`
     : kind === 'member' ? `${rec.name} (${rec.email}) loses access straight away. Anything they owned becomes unassigned, and they’re taken off meeting invites, event assignments and idea collaborators. To keep their history instead, disable their login.`
     : `Its next step${rec.next ? ` (“${rec.next}”)` : ''} disappears from Deadlines too. Separate follow-up tasks aren’t affected.`;
   const c = $('#confirm');
@@ -409,6 +410,7 @@ function confirmDeletion() {
   if (p.kind === 'member') { cancelDeletion(); return runAdmin('remove', {id:rec.id}, `Removed ${rec.name}`, rec.email); }
   if (p.kind === 'startup') { state.startups = state.startups.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted ${rec.name}`, 'removed from the directory'); }
   if (p.kind === 'kb') { state.kb = state.kb.filter(x => x.id !== rec.id); cancelDeletion(); return finish(`Deleted “${rec.title}”`); }
+  if (p.kind === 'note') { cancelDeletion(); return deleteNoteNow(rec); }
   if (p.kind === 'comment') { state.ideaComments = state.ideaComments.filter(x => x.id !== rec.id); cancelDeletion(); save(); refreshIdeaThread(rec.ideaId); render(); return toast('Contribution deleted'); }
   if (p.kind === 'meeting' && LIVE && rec.onCalendar && !p.calendarDone) {
     p.calendarDone = true;
@@ -514,6 +516,7 @@ function searchIndex() {
   state.designs.filter(d => access('design') || d.owner === me().id).forEach(d => add('Design', 'open-design', d.id, d.title, `${DESIGN_LABEL[d.status]} · ${member(d.owner)?.name || ''}`, [d.brief, d.deliverables, d.campaign].join(' ')));
   state.members.filter(m => m.active !== false).forEach(m => add('Person', 'edit-member', m.id, m.name, `${roleLabel(m.role)} · ${teamName(m.team)}`, m.email));
   (state.kb || []).forEach(a => add('Guide', 'open-kb', a.id, a.title, a.category, `${a.summary} ${a.body}`));
+  (state.notes || []).filter(canViewNote).forEach(n => add('Note', 'note-open', n.id, noteTitle(n), `${n.owner === me().id ? 'Your note' : `${member(n.owner)?.name || 'Someone'}’s note`} · edited ${fmtStamp(n.updated_at)}`, noteText(n.body)));
   if (access('budget')) { state.budget.expenses.forEach(x => add('Expense', 'edit-expense', x.id, x.name, `${aed(x.actual || x.planned)} · ${eventById(x.event)?.name || ''}`, x.receipt));
     state.budget.reimbursements.forEach(x => add('Reimbursement', 'edit-reimb', x.id, x.name, `${aed(x.amount)} · ${x.status} · ${member(x.member)?.name || ''}`, x.receipt)); }
   return out;
@@ -553,7 +556,7 @@ function handleLaunchParams() {
 }
 
 /* ================= navigation & render ================= */
-const VIEWS = {overview:vOverview, calendar:vCalendar, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
+const VIEWS = {overview:vOverview, calendar:vCalendar, notes:vNotes, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
 function go(v) {
   if (!access(v)) { toast(`${roleLabel(state.role)} doesn’t include ${sectionLabel(v)}`, '', true); return; }
   view = v; closeDialog(); render(); window.scrollTo(0, 0);
@@ -667,6 +670,7 @@ const ACT = {
     afterSync(() => fnApi('push', 'idea-comment', {id:c.id}).catch(() => {}));
   },
   'idea-comment-del': el => requestDeletion('comment', el.dataset.id),
+  ...NOTE_ACTS,
   'cal-month': el => { const d = parseD(filters.cal.cursor || calMonthStart(today())); d.setMonth(d.getMonth() + (+el.dataset.v)); filters.cal.cursor = ymd(d);
     filters.cal.sel = filters.cal.cursor.slice(0, 7) === today().slice(0, 7) ? today() : filters.cal.cursor; render(); },
   'cal-today': () => { filters.cal.sel = today(); filters.cal.cursor = calMonthStart(today()); render(); },
@@ -853,6 +857,7 @@ const FORMS = {
     if (!rec.name || !rec.amount) return toast('Add what was bought and the amount', '', true);
     upsert(state.budget.reimbursements, rec); finish(id ? 'Reimbursement saved' : 'Reimbursement added', rec.status);
   },
+  'note-share'(f, fd) { saveNoteShare(f, fd); },
   member(f, fd) { if (!oversight()) return closeDialog(); member(f.dataset.id).responsibility = fd.get('responsibility').trim(); finish('Responsibility updated'); },
   login(f, fd) { if (LIVE) passwordSignIn(String(fd.get('email') || ''), String(fd.get('password') || '')); },
   'login-code'(f, fd) { if (LIVE) verifyLoginCode(f.dataset.email, String(fd.get('code') || '')); },

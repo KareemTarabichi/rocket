@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.14-2';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.16-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -51,6 +51,7 @@ const ICON = {
   ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  note:'<path d="M5 3h10l4 4v14H5z"/><path d="M15 3v4h4M8 12h8M8 16h5"/>',
   grid:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 17h.01M12 17h.01"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
@@ -64,11 +65,11 @@ const ROLES = [
   {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'}];
 const roleLabel = r => ROLES.find(x => x.id === r)?.label || r;
 const OVERSIGHT = ['president', 'vp', 'advisor', 'ea'];
-const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'kb'];
+const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb'];
 const OVERSIGHT_SECTIONS = ['startups', 'budget', 'design', 'members'];
 const EXTRA_SECTIONS = {treasurer:['budget'], startup:['startups'], pr:['design']};
 const SECTIONS = [
-  ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'],
+  ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'], ['notes','Notes','note'],
   ['startups','Startup Directory','rocket'], ['budget','Budget','coins'], ['design','Design','image'], ['members','Members & teams','team'], ['kb','Knowledge Base','book'], ['admin','Admin','shield']];
 const sectionLabel = s => SECTIONS.find(x => x[0] === s)?.[1] || s;
 const TEAMS = [
@@ -206,6 +207,13 @@ function initDemoState() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
   ensureLinks(); state.ideaComments ||= [];
+  if (!state.notes) {   // example notes for the demo
+    const at = h => new Date(Date.now() - h * 36e5).toISOString(), N = (id, owner, h, title, body, share = {}) => ({id, title, body, owner, editors:[], viewers:[], club_access:'none', version:1, updated_at:at(h), updated_by:owner, created_at:at(h + 48), ...share});
+    state.notes = [
+      N('note1', 'm1', 2, 'Ignite 2027 brainstorm', '<h2>Themes</h2><ul><li>Founders who started at AUS</li><li>AI in the Gulf</li></ul><h3>To confirm</h3><ul data-checklist=""><li data-checked="true">Main Plaza date</li><li>Title sponsor shortlist</li><li>Comedy segment host</li></ul>', {club_access:'edit', updated_by:'m2'}),
+      N('note2', 'm4', 20, 'Leadership sync — running notes', '<p><b>Decisions</b></p><ol><li>Rise run-sheet owned by Yousef</li><li>Budget review every other week</li></ol><blockquote>Next sync: bring the venue confirmation.</blockquote>', {editors:['m1', 'm2', 'm3']}),
+      N('note3', 'm4', 50, 'My to-dos', '<ul data-checklist=""><li>Book the leadership room</li><li data-checked="true">Send minutes</li></ul>')];
+  }
   if (!state.changeLog) {   // a little example history for the demo
     const at = h => new Date(Date.now() - h * 36e5).toISOString(), E = (entity_type, entity_id, actor, h, action, subject, changes = {}) => ({id:h, entity_type, entity_id, actor, action, subject, changes, created_at:at(h)});
     state.changeLog = [
@@ -226,6 +234,7 @@ const filters = {
   ideas:{team:'all', owner:'all', stage:'all', scope:'all'}, ideaStageM:'progress',
   startups:{q:'', sector:'all', att:'all', missing:false, view:'table'},
   design:'open', kb:'',
+  notes:{q:'', tab:'all'},
   cal:{cursor:null, sel:null, mine:false, types:{meeting:true, event:true, task:true, idea:true, design:true}}
 };
 function save() {
@@ -279,6 +288,7 @@ function deletable(kind, rec) {
   if (kind === 'meeting') return ea();
   if (kind === 'idea') return canDeleteIdea(rec);
   if (kind === 'comment') return canDeleteComment(rec);
+  if (kind === 'note') return canDeleteNote(rec);
   if (kind === 'startup') return canApproveStartupDeletion();
   if (kind === 'kb') return isAdmin();
   if (kind === 'member') { const list = adminData.members || state.members;

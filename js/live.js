@@ -40,9 +40,9 @@ async function buildState(userId) {
     q('profiles').order('name'), q('meetings'), sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100),
     q('calendar_settings').eq('id', 1).maybeSingle(), q('events').order('date'), q('event_requirements').order('position'), q('tasks'), q('ideas').order('created_at'),
     q('designs'), q('startups').order('name'), q('budget_settings').eq('id', 1).maybeSingle(), q('expenses'), q('reimbursements'),
-    q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle(), q('idea_comments').order('created_at')]);
+    q('kb_articles').order('title'), q('app_settings').eq('id', 1).maybeSingle(), q('idea_comments').order('created_at'), q('notes').order('updated_at', {ascending:false})]);
   const bad = res.find(r => r.error); if (bad) throw bad.error;
-  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st, ic] = res.map(r => r.data);
+  const [p, m, n, cal, ev, rq, t, i, d, s, bs, ex, rb, kb, st, ic, nt] = res.map(r => r.data);
   const members = p.map(x => ({id:x.id, name:x.name, role:x.role, team:x.team, email:x.email, responsibility:x.responsibility, is_admin:x.is_admin, active:x.active, whatsapp:x.whatsapp || ''}));
   const mine = members.find(x => x.id === userId);
   if (!mine || !mine.active) return null;
@@ -60,6 +60,7 @@ async function buildState(userId) {
       deletion:x.deletion_requested_at ? {by:x.deletion_requested_by, at:x.deletion_requested_at, reason:x.deletion_reason || ''} : null})),
     kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
     settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}},
+    notes:(nt || []).map(normNote),
     ideaComments:(ic || []).map(x => ({id:x.id, ideaId:x.idea_id, author:x.author, title:x.title, body:x.body, at:x.created_at})),
     budget:{overall:+(bs?.overall || 0), allocations:bs?.allocations || {},
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),
@@ -69,6 +70,7 @@ async function buildState(userId) {
 }
 
 async function reloadLive() {
+  if (typeof noteUI !== 'undefined' && noteUI.dirty) await saveNote();   // save the open note first
   const {data:{session}} = await sb.auth.getSession();
   if (!session) return showLogin();
   const next = await buildState(session.user.id);
@@ -227,7 +229,7 @@ async function savePassword(password, again, out) {
 function openApp() {
   document.body.classList.remove('is-login'); $('#login').innerHTML = '';
   view = 'overview'; render();
-  handleLaunchParams(); maybeShowWelcome();
+  handleLaunchParams(); maybeShowWelcome(); startNotesRealtime();
 }
 async function enterApp(session) {
   try {
@@ -238,7 +240,7 @@ async function enterApp(session) {
     openApp();
   } catch (e) { showLogin(`<span class="err">Couldn’t load Rocket: ${esc(e.message)}</span>`); }
 }
-async function signOut() { await disablePush(true); await sb.auth.signOut(); closeWelcome(false); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }
+async function signOut() { flushNote(); try { sb.removeAllChannels(); } catch (e) {} noteUI.listChan = noteUI.chan = null; noteUI.open = null; await disablePush(true); await sb.auth.signOut(); closeWelcome(false); adminData.members = null; showLogin('<span class="faint">You’re signed out.</span>'); }
 
 // Knowledge-base images go to the public "kb-images" storage bucket; only admins can upload.
 async function uploadKbImage(file) {
@@ -272,5 +274,5 @@ async function liveBoot() {
   });
   registerSW();
   // Pick up other members' changes when you come back to the tab.
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state && !dlg().open) reloadLive().catch(() => {}); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state && !dlg().open && !noteUI.dirty) reloadLive().catch(() => {}); });
 }

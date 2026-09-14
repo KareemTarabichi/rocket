@@ -74,6 +74,7 @@ async function ptrSnapBack() {
 }
 
 async function ptrRefresh() {
+  if (typeof noteUI !== 'undefined' && noteUI.dirty) await saveNote();
   if (LIVE) { await reloadLive(); if (view === 'admin') { adminData.members = null; adminData.calendar = null; render(); } }
   else { await wait(450); render(); }
 }

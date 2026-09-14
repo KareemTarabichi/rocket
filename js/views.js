@@ -31,7 +31,7 @@ const roleSelect = id => `<select class="input" id="${id}" data-change="role" ar
 
 /* ================= shell ================= */
 const TABS = ['overview', 'calendar', 'events', 'deadlines'];
-const FAB = {calendar:() => ['new-event','New event'], meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
+const FAB = {notes:() => !noteUI.open && ['note-new','New note'], calendar:() => ['new-event','New event'], meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
   startups:() => ['new-startup','Add startup'], design:() => ['new-design','New request'], budget:() => ['new-expense','Add expense']};
 function renderShell() {
   const overdue = pending().filter(x => daysFrom(x.due) < 0).length;

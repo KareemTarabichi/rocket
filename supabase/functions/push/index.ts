@@ -154,6 +154,14 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true, sent });
     }
+    case 'note-share': {   // people newly given access to a note → them
+      const { data: n } = await db.from('notes').select('title, owner, editors, viewers').eq('id', id).maybeSingle();
+      if (!n || n.owner !== me.id) return json({ error: 'Only the note’s owner can send this.' }, 403);
+      const shared = new Set([...(n.editors ?? []), ...(n.viewers ?? [])]);
+      const added = (Array.isArray(body.added) ? body.added : []).map(String).filter((u) => shared.has(u) && u !== me.id);
+      const sent = await sendTo(added, { title: `${me.name} shared a note with you`, body: n.title || 'Untitled note', url: `${SITE_URL}/?view=notes`, tag: `note-${id}` });
+      return json({ ok: true, sent });
+    }
     case 'deletion-request': {   // someone asked to delete a startup → admins and the President
       const { data: s } = await db.from('startups').select('name, deletion_requested_by, deletion_reason').eq('id', id).maybeSingle();
       if (!s || s.deletion_requested_by !== me.id) return json({ error: 'Only the person who asked can send this.' }, 403);

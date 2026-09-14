@@ -177,7 +177,7 @@ async function checkForUpdate() {
   lastBuildCheck = Date.now();
   const now = await buildFingerprint();
   if (!now || now === bootBuild) return;
-  const busy = dlg().open || document.getElementById('confirm')?.open || welcome || (typeof PTR !== 'undefined' && PTR.busy) || document.body.classList.contains('is-login') && $('#l-pass')?.value;
+  const busy = dlg().open || document.getElementById('confirm')?.open || welcome || (typeof noteUI !== 'undefined' && (noteUI.dirty || noteUI.open)) || (typeof PTR !== 'undefined' && PTR.busy) || document.body.classList.contains('is-login') && $('#l-pass')?.value;
   if (!busy) { location.reload(); return; }
   bootBuild = now;   // don't nag repeatedly
   toast('Rocket was updated', 'reload to get the new version');
