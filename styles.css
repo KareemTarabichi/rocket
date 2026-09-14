@@ -952,3 +952,8 @@ dialog.dlg.search-pop[open]{display:flex}
   .cx-item{grid-template-columns:4px 62px minmax(0,1fr);padding:12px 14px 12px 10px}
   .cx-item > .due{grid-column:3;justify-self:start}
 }
+
+/* search: close controls */
+.search-esc{cursor:pointer}
+.search-cancel{display:none}
+@media (max-width:760px){.search-esc{display:none}.search-cancel{display:inline-flex;color:var(--cyan);font-size:15px;height:40px}}

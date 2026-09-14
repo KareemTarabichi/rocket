@@ -499,7 +499,7 @@ function describeChange(e) {
 let searchSel = 0;
 function openSearch() {
   if (!state) return;
-  openDialog(`<div class="search-head">${ic('search')}<input class="input" id="search-q" data-input="search-q" type="search" autocomplete="off" placeholder="Search ideas, events, meetings, startups, people, guides…" aria-label="Search Rocket"><span class="kbd">esc</span></div><div id="search-results" class="search-results" role="listbox"></div>`, 'search-pop');
+  openDialog(`<div class="search-head">${ic('search')}<input class="input" id="search-q" data-input="search-q" type="search" autocomplete="off" placeholder="Search ideas, events, meetings, startups, people, guides…" aria-label="Search Rocket"><button type="button" class="kbd search-esc" data-act="close" aria-label="Close search">esc</button><button type="button" class="btn btn-ghost sm search-cancel" data-act="close">Cancel</button></div><div id="search-results" class="search-results" role="listbox"></div>`, 'search-pop');
   renderSearch('');
   setTimeout(() => $('#search-q')?.focus());
 }

@@ -59,6 +59,13 @@ Deno.serve(async (req) => {
       ]);
       if (pErr || uErr) return json({ error: (pErr ?? uErr)!.message }, 500);
       const byId = new Map(users.users.map((u) => [u.id, u]));
+      // Supabase's Users page shows the login account's metadata; Rocket's source of truth is profiles.
+      // Copy name/role/team/admin across wherever they differ (keeps password_set and anything else).
+      const stale = (profiles ?? []).filter((p) => { const md = byId.get(p.id)?.user_metadata ?? {};
+        return byId.has(p.id) && (md.name !== p.name || md.role !== p.role || md.team !== p.team || md.is_admin !== p.is_admin); });
+      await Promise.all(stale.map((p) => admin.auth.admin.updateUserById(p.id, {
+        user_metadata: { ...(byId.get(p.id)?.user_metadata ?? {}), name: p.name, role: p.role, team: p.team, is_admin: p.is_admin },
+      }).catch(() => null)));
       const members = (profiles ?? []).map((p) => {
         const u = byId.get(p.id);
         return {
@@ -122,6 +129,8 @@ Deno.serve(async (req) => {
         return json({ error: 'Rocket needs at least one admin. Make someone else an admin first.' }, 400);
       const { error } = await admin.from('profiles').update(patch).eq('id', t.id);
       if (error) return json({ error: error.message }, 400);
+      const { data: u } = await admin.auth.admin.getUserById(t.id);
+      await admin.auth.admin.updateUserById(t.id, { user_metadata: { ...(u?.user?.user_metadata ?? {}), ...patch } }).catch(() => null);
       const changes = (['name', 'role', 'team', 'is_admin'] as const)
         .filter((k) => patch[k] !== t[k]).map((k) => `${k}: ${t[k]} → ${patch[k]}`).join(', ');
       await log('update', t.email, changes || 'no changes');
