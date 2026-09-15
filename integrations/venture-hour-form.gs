@@ -25,6 +25,7 @@ const ROCKET_URL = 'https://ptcsxotsucwaxqfrdlkd.supabase.co/functions/v1/ventur
 const SENDER_NAME = 'AUS Launchpad';
 
 function onFormSubmit(e) {
+  if (!e || !e.response) throw new Error('This runs by itself when someone submits the form. To test, run `setup` once, then submit the form (or run `resendLatest`).');
   const payload = fromResponse(e.response);
   let res;
   try { res = callRocket(payload); }
@@ -47,6 +48,16 @@ function setup() {
   ScriptApp.newTrigger('hourly').timeBased().everyHours(1).create();
   const ok = callRocket({ action: 'ping' });
   console.log(ok.ok ? 'Connected to Rocket. Triggers installed.' : 'Triggers installed, but Rocket said: ' + JSON.stringify(ok));
+}
+
+// Sends the form's most recent response to Rocket again (for testing). Safe to repeat: Rocket
+// recognises a response it has already handled and never books it twice.
+function resendLatest() {
+  const all = FormApp.getActiveForm().getResponses();
+  if (!all.length) { console.log('No responses yet — submit the form first.'); return; }
+  const payload = fromResponse(all[all.length - 1]), res = callRocket(payload);
+  console.log('Rocket said: ' + JSON.stringify({ status: res.status, warning: res.warning, error: res.error }));
+  reply(payload.email, res);
 }
 
 // ── helpers ──
