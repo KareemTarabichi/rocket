@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0A0A0C">
+  <meta name="robots" content="noindex">
+  <title>The Venture Hour · Survey</title>
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="styles.css?v=2026.09.18-1">
+  <style>
+    body{margin:0}
+    [hidden]{display:none!important}
+    .login.survey{position:relative;min-height:100vh;min-height:100dvh;overflow:hidden;padding:32px 18px}
+    .survey .vh-choice span{border-color:rgba(255,255,255,.16)}
+    .survey .login-card{width:min(520px,100%)}
+    .survey h1{font-size:26px}
+    .survey .sv-who{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-raised);font-size:13.5px;text-align:left}
+    .survey .sv-who b{font:600 16px var(--f-display)}
+    .survey textarea.input{height:auto;min-height:112px;padding:10px 12px;line-height:1.5;resize:vertical}
+    .survey .vh-choice label{font-weight:400}
+    .survey .field > label{font-weight:500}
+    .survey .done{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding:12px 0}
+    .survey .done svg{width:44px;height:44px;color:var(--success)}
+  </style>
+</head>
+<body>
+  <div class="login survey"><div class="thermal"></div><div class="grain"></div>
+    <div class="login-card" id="card">
+      <div class="brand"><svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#1D1B26"/><path d="M14 5 21 21 14 17.5 7 21Z" fill="none" stroke="#4DD9E8" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 17.5V23" stroke="#F5B942" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span class="brand-text"><span class="brand-name">The Venture Hour</span><span class="brand-org">AUS Launchpad</span></span></div>
+      <div id="body" role="status"><p class="faint">Loading your survey…</p></div>
+    </div>
+  </div>
+
+  <script src="config.js?v=2026.09.18-1"></script>
+  <script>
+  (function () {
+    const CFG = window.ROCKET_CONFIG || {}, body = document.getElementById('body');
+    const token = new URLSearchParams(location.search).get('t') || '';
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const STAGES = [['idea', 'Idea'], ['validating', 'Validating'], ['building', 'Building'], ['launched', 'Launched'], ['revenue', 'Revenue']];
+    const show = html => { body.innerHTML = html; };
+    const note = (title, text) => show(`<div><h1>${esc(title)}</h1><p style="margin-top:8px">${text}</p></div>`);
+    // The survey talks to two database functions that only work with this private link.
+    async function rpc(fn, args) {
+      const res = await fetch(`${CFG.supabaseUrl}/rest/v1/rpc/${fn}`, {method:'POST', headers:{'Content-Type':'application/json', apikey:CFG.supabaseAnonKey, Authorization:`Bearer ${CFG.supabaseAnonKey}`}, body:JSON.stringify(args)});
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((data && (data.message || data.hint)) || `Something went wrong (${res.status})`);
+      return data;
+    }
+    const thanks = () => show(`<div class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>
+      <h1>Thank you!</h1><p>Your survey is in. You can sign up for your next Venture Hour whenever you’re ready.</p></div>`);
+
+    async function start() {
+      if (!CFG.supabaseUrl || !CFG.supabaseAnonKey) return note('Survey unavailable', 'This page isn’t connected yet.');
+      if (!/^[0-9a-f-]{36}$/i.test(token)) return note('Link not recognised', 'Open the survey from the link in your email or calendar invite.');
+      let info;
+      try { info = await rpc('vh_survey_info', {p_token:token}); } catch (e) { return note('Couldn’t load the survey', esc(e.message)); }
+      if (!info) return note('Link not recognised', 'Open the survey from the link in your email or calendar invite.');
+      if (info.done) return thanks();
+      if (info.cancelled) return note('No survey needed', 'This session was cancelled, so there’s nothing to fill in.');
+      const when = new Date(info.starts_at).toLocaleString('en-GB', {weekday:'long', day:'numeric', month:'long', hour:'numeric', minute:'2-digit', hour12:true});
+      if (!info.started) return note('Not yet', `Your session with ${esc(info.mentor)} is on ${esc(when)}. Come back to this link after it.`);
+      show(`<form id="f" novalidate style="display:flex;flex-direction:column;gap:18px">
+        <div><h1>How did it go${info.student ? `, ${esc(info.student)}` : ''}?</h1><p style="margin-top:8px">Three quick questions. You need to send this before you can book your next Venture Hour.</p></div>
+        <div class="sv-who"><b>${esc(info.mentor)}</b>${info.mentor_org ? `<span class="muted">${esc(info.mentor_org)}</span>` : ''}<span class="faint">${esc(when)}</span></div>
+        <div class="field"><label>Where is your venture right now?</label><div class="vh-choice">${STAGES.map(([v, l]) => `<label><input type="radio" name="stage" value="${v}"><span>${l}</span></label>`).join('')}</div></div>
+        <div class="field"><label>How much progress did this session give you? <span class="faint">1 = none · 5 = a lot</span></label><div class="vh-choice">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="rating" value="${n}"><span>${n}</span></label>`).join('')}</div></div>
+        <div class="field"><label for="tk">Your key takeaway</label><textarea class="input" id="tk" name="takeaway" rows="4" maxlength="2000" placeholder="The one thing you’ll do differently after this conversation"></textarea></div>
+        <span class="err" id="err" role="alert"></span>
+        <button class="btn btn-primary" style="justify-content:center">Send survey</button>
+      </form>`);
+      document.getElementById('f').addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(e.target), err = document.getElementById('err'), btn = e.target.querySelector('button');
+        const stage = fd.get('stage'), rating = +fd.get('rating'), takeaway = String(fd.get('takeaway') || '').trim();
+        if (!stage) return err.textContent = 'Pick the stage of your venture.';
+        if (!rating) return err.textContent = 'Rate your progress from 1 to 5.';
+        if (!takeaway) return err.textContent = 'Add your key takeaway.';
+        err.textContent = ''; btn.disabled = true; btn.textContent = 'Sending…';
+        try { await rpc('vh_submit_survey', {p_token:token, p_stage:stage, p_rating:rating, p_takeaway:takeaway}); thanks(); }
+        catch (x) { err.textContent = x.message; btn.disabled = false; btn.textContent = 'Send survey'; }
+      });
+    }
+    start();
+  })();
+  </script>
+</body>
+</html>

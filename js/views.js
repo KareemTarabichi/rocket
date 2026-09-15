@@ -32,6 +32,7 @@ const roleSelect = id => `<select class="input" id="${id}" data-change="role" ar
 /* ================= shell ================= */
 const TABS = ['overview', 'calendar', 'events', 'deadlines'];
 const FAB = {notes:() => !noteUI.open && ['note-new','New note'], calendar:() => ['new-event','New event'], meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
+  programmes:() => vhReady() && (vh.tab === 'mentors' ? ['vh-new-mentor','Add mentor'] : ['week', 'signups'].includes(vh.tab) && ['vh-add-signup','Add sign-up']),
   startups:() => ['new-startup','Add startup'], design:() => ['new-design','New request'], budget:() => ['new-expense','Add expense']};
 function renderShell() {
   const overdue = pending().filter(x => daysFrom(x.due) < 0).length;
@@ -286,11 +287,11 @@ function vCalendar() {
   const lead = (first.getDay() + 6) % 7, days = new Date(y, mo + 1, 0).getDate(), weeks = Math.ceil((lead + days) / 7);
   const cells = Array.from({length:weeks * 7}, (_, k) => ymd(new Date(y, mo, 1 - lead + k)));
   const title = first.toLocaleDateString('en-GB', {month:'long', year:'numeric'});
-  const typeChips = `<div class="${isM() ? 'scroller' : 'filters'}">${CAL_TYPES.map(([k, l]) => `<button type="button" class="fchip cal-k k-${k}" data-act="cal-type" data-v="${k}" aria-pressed="${f.types[k]}"><i></i>${l}</button>`).join('')}
+  const typeChips = `<div class="${isM() ? 'scroller' : 'filters'}">${CAL_TYPES.filter(([k]) => k !== 'programme' || access('programmes')).map(([k, l]) => `<button type="button" class="fchip cal-k k-${k}" data-act="cal-type" data-v="${k}" aria-pressed="${f.types[k]}"><i></i>${l}</button>`).join('')}
     <button type="button" class="fchip" data-act="cal-mine" aria-pressed="${f.mine}">${oversight() ? 'Only mine' : 'Only mine'}</button></div>`;
   const nav = `<div class="cal-nav"><button type="button" class="btn sm icon-btn" data-act="cal-month" data-v="-1" aria-label="Previous month">‹</button><h2>${title}</h2><button type="button" class="btn sm icon-btn" data-act="cal-month" data-v="1" aria-label="Next month">›</button><button type="button" class="btn sm" data-act="cal-today">Today</button></div>`;
   const row = it => `<button type="button" class="cx-item k-${it.kind} ${it.done ? 'is-done' : ''}" data-act="${it.act}" data-id="${esc(it.id)}" data-v="${esc(it.id)}">
-      <span class="cx-bar"></span><span class="cx-when">${it.time ? fmtTime(it.time) : ({meeting:'Meeting', event:'Event', task:'Due', idea:'Next step', design:'Design'}[it.kind])}</span>
+      <span class="cx-bar"></span><span class="cx-when">${it.time ? fmtTime(it.time) : ({meeting:'Meeting', event:'Event', task:'Due', idea:'Next step', design:'Design', programme:'Session'}[it.kind])}</span>
       <span class="cx-text"><span class="cx-title">${esc(it.title)}</span><span class="cx-sub">${esc(it.sub)}</span></span>${it.due === 'over' ? '<span class="due over">Overdue</span>' : it.due === 'soon' ? '<span class="due soon">Due soon</span>' : it.done && it.kind !== 'event' && it.kind !== 'meeting' ? '<span class="due done">Done</span>' : ''}</button>`;
   const dayList = byDay[f.sel] || [], upcoming = items.filter(it => it.date > f.sel && !it.done).slice(0, 8);
   const agenda = `<div class="panel cx-agenda"><div class="panel-head"><h2>${fmtDate(f.sel, {weekday:'long', day:'numeric', month:'long'})}</h2><span class="faint num" style="font-size:12px">${dayList.length || 'Nothing'}${dayList.length ? '' : ' scheduled'}</span></div>

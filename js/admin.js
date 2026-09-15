@@ -233,7 +233,7 @@ function vAdminLinks() {
 /* ---- Admin → Permissions: who can open which section, and the fixed rules ---- */
 let permDraft = null;   // unsaved grid edits
 const SECTION_NOTE = {calendar:'Everything with a date', meetings:'Invites decide which meetings you see', events:'', ideas:'', deadlines:'Your own items (leadership sees all)', notes:'Only notes shared with you',
-  kb:'Guides', startups:'Founder contacts', budget:'Money', design:'Creative requests', members:'Everyone’s details'};
+  kb:'Guides', programmes:'The Venture Hour: mentors, students, surveys', startups:'Founder contacts', budget:'Money', design:'Creative requests', members:'Everyone’s details'};
 const permPeople = (a, s) => state.members.filter(m => m.active !== false && (a[s].roles.includes(m.role) || a[s].teams.includes(m.team)));
 function vAdminPermissions() {
   const saved = sectionAccess(), a = permDraft || saved;
@@ -249,7 +249,7 @@ function vAdminPermissions() {
     <div class="pm-notes">
       <span class="pm-chip">${ic('home')}<b>Overview</b> is always on for everyone</span>
       <span class="pm-chip">${ic('shield')}<b>Admin</b> is for people with admin rights (set per person in Members)</span>
-      <span class="pm-chip">${ic('shield')}<b>Startups, Budget, Design, Members & teams</b> are enforced by the database — untick and the data is locked, not just hidden</span>
+      <span class="pm-chip">${ic('shield')}<b>Programmes, Startups, Budget, Design, Members & teams</b> are enforced by the database — untick and the data is locked, not just hidden</span>
       <span class="pm-chip faint-chip">The other sections only hide the tab and search results</span>
     </div>
     <div class="table-wrap pm-wrap"><table class="pm-table">
@@ -277,6 +277,8 @@ const PERM_RULES = [
   ['Ideas', [['Submit an idea', 'Everyone — you become its owner (locked)'], ['Edit an idea', 'Its owner, collaborators, leadership and admins'], ['Add contributions', 'Its owner and collaborators'], ['Delete an idea', 'Its owner or an admin']]],
   ['Deadlines', [['See items', 'Leadership sees everyone’s; others see their own and ideas they collaborate on'], ['Tick an item off', 'Its owner (and leadership)'], ['Assign a follow-up to someone else', 'Leadership']]],
   ['Startups & money', [['Add or edit a startup', 'Anyone with the Startup Directory section'], ['Delete a startup', 'Admins or the President (others can request it)'], ['Edit budget, expenses, reimbursements', 'Anyone with the Budget section']]],
+  ['Programmes', [['Run The Venture Hour: mentors, slots, sign-ups, surveys, settings', 'Anyone with the Programmes section'], ['Book a student into a slot', 'Rocket does it, first come first served — from the Google Form or “Add a sign-up”'],
+    ['Book again after a session', 'Only once the student has filled the post-meeting survey'], ['Fill a post-meeting survey', 'The student, from their private link']]],
   ['Design', [['Create or edit a request', 'Anyone with the Design section'], ['Update the status of your own work', 'The person it’s assigned to']]],
   ['Notes', [['See a note', 'Its owner and anyone it’s shared with (or the whole club, if opened up)'], ['Change who a note is shared with', 'Its owner'], ['Delete a note', 'Its owner or an admin']]],
   ['People & settings', [['Edit responsibilities', 'Leadership'], ['Invite, remove, change roles, reset passwords', 'Admins'], ['Knowledge base, links, permissions', 'Admins']]],

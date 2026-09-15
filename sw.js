@@ -1,8 +1,8 @@
 /* Rocket service worker: offline fallback for the app shell, and push notifications.
    Always tries the network first so a new deploy is picked up straight away. */
-const CACHE = 'rocket-shell-v4';
+const CACHE = 'rocket-shell-v5';
 const SHELL = ['/', '/index.html', '/styles.css', '/config.js', '/js/core.js', '/js/views.js', '/js/views-more.js',
-  '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/notes.js', '/js/app.js', '/icons/icon-192.png', '/manifest.webmanifest'];
+  '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/notes.js', '/js/venture.js', '/js/app.js', '/icons/icon-192.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting()));

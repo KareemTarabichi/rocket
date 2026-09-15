@@ -36,6 +36,7 @@ function takeSnapshot() {
 
 async function buildState(userId) {
   const q = t => sb.from(t).select('*');
+  const ventureP = loadVenture().catch(e => ({error:e.message}));   // loads separately: a missing programme never blocks Rocket
   const res = await Promise.all([
     q('profiles').order('name'), q('meetings'), sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100),
     q('calendar_settings').eq('id', 1).maybeSingle(), q('events').order('date'), q('event_requirements').order('position'), q('tasks'), q('ideas').order('created_at'),
@@ -66,6 +67,7 @@ async function buildState(userId) {
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),
       reimbursements:rb.map(x => ({id:x.id, name:x.name, member:x.member, event:x.event_id || '', amount:+x.amount, status:x.status, receipt:x.receipt}))},
     adminLog:[],
+    venture:await ventureP,
   };
 }
 

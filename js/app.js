@@ -515,6 +515,7 @@ function searchIndex() {
   if (access('startups')) state.startups.forEach(s => add('Startup', 'open-startup', s.id, s.name, s.sector || '', [s.notes, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ')));
   state.designs.filter(d => access('design') || d.owner === me().id).forEach(d => add('Design', 'open-design', d.id, d.title, `${DESIGN_LABEL[d.status]} · ${member(d.owner)?.name || ''}`, [d.brief, d.deliverables, d.campaign].join(' ')));
   state.members.filter(m => m.active !== false).forEach(m => add('Person', 'edit-member', m.id, m.name, `${roleLabel(m.role)} · ${teamName(m.team)}`, m.email));
+  if (access('programmes') && vhReady()) V().mentors.forEach(m => add('Mentor', 'vh-edit-mentor', m.id, m.name, `${VH_TYPE[m.type]} · ${m.org_title || 'The Venture Hour'}${m.active ? '' : ' · inactive'}`, `${m.email} ${m.focus_area}`));
   (state.kb || []).forEach(a => add('Guide', 'open-kb', a.id, a.title, a.category, `${a.summary} ${a.body}`));
   (state.notes || []).filter(canViewNote).forEach(n => add('Note', 'note-open', n.id, noteTitle(n), `${n.owner === me().id ? 'Your note' : `${member(n.owner)?.name || 'Someone'}’s note`} · edited ${fmtStamp(n.updated_at)}`, noteText(n.body)));
   if (access('budget')) { state.budget.expenses.forEach(x => add('Expense', 'edit-expense', x.id, x.name, `${aed(x.actual || x.planned)} · ${eventById(x.event)?.name || ''}`, x.receipt));
@@ -556,7 +557,7 @@ function handleLaunchParams() {
 }
 
 /* ================= navigation & render ================= */
-const VIEWS = {overview:vOverview, calendar:vCalendar, notes:vNotes, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
+const VIEWS = {overview:vOverview, calendar:vCalendar, notes:vNotes, programmes:vProgrammes, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
 function go(v) {
   if (!access(v)) { toast(`${roleLabel(state.role)} doesn’t include ${sectionLabel(v)}`, '', true); return; }
   view = v; closeDialog(); render(); window.scrollTo(0, 0);
@@ -671,6 +672,7 @@ const ACT = {
   },
   'idea-comment-del': el => requestDeletion('comment', el.dataset.id),
   ...NOTE_ACTS,
+  ...VH_ACTS,
   'cal-month': el => { const d = parseD(filters.cal.cursor || calMonthStart(today())); d.setMonth(d.getMonth() + (+el.dataset.v)); filters.cal.cursor = ymd(d);
     filters.cal.sel = filters.cal.cursor.slice(0, 7) === today().slice(0, 7) ? today() : filters.cal.cursor; render(); },
   'cal-today': () => { filters.cal.sel = today(); filters.cal.cursor = calMonthStart(today()); render(); },
@@ -725,6 +727,7 @@ document.addEventListener('keydown', e => {
 });
 
 const CHANGE = {
+  ...VH_CHANGE,
   // Admin → Permissions grid: edits stay in a draft until "Save permissions"
   perm: el => { if (!isAdmin()) return; permDraft ||= JSON.parse(JSON.stringify(sectionAccess()));
     const list = permDraft[el.dataset.s][el.dataset.k], id = el.dataset.id;
@@ -766,6 +769,7 @@ function syncDraft(el) {
 }
 document.addEventListener('input', e => {
   const el = e.target;
+  if (vhInput(el)) return;
   if (el.dataset.input === 'st-q') { filters.startups.q = el.value; $('#st-results').innerHTML = startupResults(); const c = $('#st-count'); if (c) c.textContent = filteredStartups().length + ' shown'; return; }
   if (el.dataset.input === 'search-q') { renderSearch(el.value); return; }
   if (el.dataset.input === 'kb-q') { filters.kb = el.value; $('#kb-results').innerHTML = kbResults(); return; }
@@ -775,6 +779,7 @@ document.addEventListener('input', e => {
 
 /* ================= form submission ================= */
 const FORMS = {
+  ...VH_FORMS,
   meeting(f, fd) {
     if (!ea()) { toast('Only the Executive Assistant can schedule meetings', '', true); return closeDialog(); }
     const id = f.dataset.id, prev = id ? state.meetings.find(x => x.id === id) : null, err = $('#merr');

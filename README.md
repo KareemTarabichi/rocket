@@ -25,7 +25,11 @@ js/views.js, views-more.js section views
 js/admin.js                Admin section (members, roles, teams, logins)
 js/live.js                 Supabase sign-in, loading, and saving changes
 js/app.js                  dialogs, forms, deletion, event handling
+js/venture.js              Programmes → The Venture Hour (mentors, slots, sign-ups, surveys)
 js/demo-data.js            startups for the demo
+survey.html                public post-meeting survey page (opened from each student's private link)
+integrations/venture-hour-form.gs         Apps Script for the Venture Hour Google Form
+supabase/functions/venture-hour/index.ts  Google Form webhook + Venture Hour calendar invites
 supabase/migrations/…sql   database schema + row-level security
 supabase/functions/admin-users/index.ts   server-side admin API
 supabase/import_startups.sql              your 56 startups, for the live database
@@ -131,7 +135,7 @@ Later, if you connect your own email sender (Authentication → Emails → SMTP)
   - **Other links** (Instagram, forms, anything): shown to everyone under "Club links" on the Overview.
 - **Approve startup deletions**. Anyone with the directory can ask to delete a startup; only an admin or the President can approve (it then disappears for everyone) or keep it.
 
-- **Permissions** (Admin → Permissions): a grid of which club roles and teams can open each section — a member gets a section if their role **or** their team is ticked. Startups, Budget, Design and Members & teams are enforced by the database (`20260917000000_section_permissions.sql`); the other sections are hidden in the app. Overview is always on; Admin always follows the per-person admin switch. The same tab lists the fixed rules (who schedules meetings, who deletes ideas, etc.).
+- **Permissions** (Admin → Permissions): a grid of which club roles and teams can open each section — a member gets a section if their role **or** their team is ticked. Programmes, Startups, Budget, Design and Members & teams are enforced by the database (`20260917000000_section_permissions.sql`, `20260918000000_venture_hour.sql`); the other sections are hidden in the app. Overview is always on; Admin always follows the per-person admin switch. The same tab lists the fixed rules (who schedules meetings, who deletes ideas, etc.).
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.
 
@@ -170,6 +174,22 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
    `supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…`
    `supabase functions deploy google-calendar --use-api --no-verify-jwt`
 6. Sign in to Rocket as the Executive Assistant → **Meetings → Connect Google Calendar** → pick the club Google account.
+
+## Programmes → The Venture Hour
+
+Weekly one-to-one mentor office hours. Open to leadership and the Innovation role by default (change it in Admin → Permissions → Programmes; the database enforces it).
+
+- **Mentors**: a pool of VCs, alumni founders and professors. Inactive mentors are never picked.
+- **Slots**: every Monday at 6:00 AM (Dubai) Rocket picks 4–5 active mentors at random, skipping anyone picked in the last 2 weeks (both numbers are in Setup). If the pool is too small it fills up with the least recently picked. You can also pick by hand, swap a mentor, change a slot's time, or cancel it.
+- **Sign-ups**: students fill a Google Form. Each response goes to Rocket, which books them into the earliest open slot, first come first served by the form's own timestamp. It also waitlists them when every slot is taken, blocks them while they owe a survey, and refuses a second booking while one is upcoming. Everything is logged on the Sign-ups tab. Cancelling a booking hands the slot to the first person on that week's waitlist.
+- **Invites**: when a slot is booked, the club Google account (the one connected for meetings) invites both the mentor and the student, with the student's topic and survey link in the invite.
+- **Surveys**: an hour after the meeting the student is emailed a private link to `survey.html` (stage of venture, progress 1–5, key takeaway). The Surveys tab shows who still owes one.
+
+Set up once:
+1. Run `supabase/migrations/20260918000000_venture_hour.sql` in the SQL Editor. It also schedules the Monday pick and the hourly tidy-up with pg_cron.
+2. In Terminal: `supabase secrets set VENTURE_SECRET=<a long random string>` then `supabase functions deploy venture-hour --use-api --no-verify-jwt`.
+3. Create the Google Form, signed in as the club account, with questions titled with *name*, *AUS email*, *major*, *year* and *what to discuss*. Then go to **⋮ → Apps Script**, paste `integrations/venture-hour-form.gs`, and add `VENTURE_SECRET` under Project Settings → Script properties. Run `setup` once. The script sends the students' emails from the club account.
+4. Paste the form's link into Programmes → The Venture Hour → Setup.
 
 ## Phone notifications
 
