@@ -17,7 +17,7 @@ const VH_REASON = {survey_owed:'owes the survey from their last session', alread
   from_waitlist:'moved up from the waitlist', cancelled:'cancelled', didnt_happen:'the meeting didn’t happen', student_cancelled:'the student can’t make it', mentor_unavailable:'the mentor can’t make it'};
 const VH_SLOT = {open:['s-in_progress', 'Open'], claimed:['s-done', 'Booked'], completed:['s-not_started', 'Done'], cancelled:['s-blocked', 'Cancelled']};
 const VH_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const vh = {tab:'week', week:null, log:'all', logAsc:false, q:'', mtype:'all', inactive:false, mq:'', busy:false, status:null};
+const vh = {prog:'venture', tab:'week', week:null, log:'all', logAsc:false, q:'', mtype:'all', inactive:false, mq:'', busy:false, status:null};
 
 const V = () => state.venture;
 const vhReady = () => !!(V() && V().settings);
@@ -270,10 +270,12 @@ function vhOutcome(r) {
 
 /* ---------------- views ---------------- */
 function vProgrammes() {
-  const d = V();
+  const d = V(), labs = vh.prog === 'labs';
   const head = heading('Programmes', 'The club’s recurring programmes. Each one runs from here: people, schedule, sign-ups and follow-up.',
-    vhReady() ? `<button class="btn btn-primary" data-act="vh-add-signup">${ic('plus')}Add a sign-up</button>` : '');
-  const card = `<div class="prog-strip"><button type="button" class="prog-card active" aria-current="true">${ic('spark')}<span><b>The Venture Hour</b><span>Weekly one-to-one mentor office hours</span></span></button></div>`;
+    !labs && vhReady() ? `<button class="btn btn-primary" data-act="vh-add-signup">${ic('plus')}Add a sign-up</button>` : '');
+  const prog = (id, icon, name, sub) => `<button type="button" class="prog-card ${vh.prog === id ? 'active' : ''}" data-act="vh-prog" data-v="${id}" ${vh.prog === id ? 'aria-current="true"' : ''}>${ic(icon)}<span><b>${name}</b><span>${sub}</span></span></button>`;
+  const card = `<div class="prog-strip">${prog('venture', 'spark', 'The Venture Hour', 'Weekly one-to-one mentor office hours')}${prog('labs', 'bulb', 'LaunchpadLabs', 'Coming soon')}</div>`;
+  if (labs) return `<div class="page">${head}${card}<div class="panel vh-empty">${ic('bulb')}<div><b>LaunchpadLabs</b><p>Omar to lead.</p></div></div></div>`;
   if (!d) return `<div class="page">${head}${card}<div class="panel empty">${LIVE ? 'Loading the programme…' : 'No programme data.'}</div></div>`;
   if (d.error) return `<div class="page">${head}${card}<div class="banner">${ic('info')}<span>${d.missing ? 'The Venture Hour isn’t set up in the database yet. An admin needs to run <b>supabase/migrations/20260918000000_venture_hour.sql</b> in the Supabase SQL Editor.' : `Couldn’t load the programme: ${esc(d.error)}`}</span></div>
     <div><button class="btn" data-act="vh-reload">Try again</button></div></div>`;
@@ -518,6 +520,7 @@ function vhDemoSurveyDialog(signupId) {
 
 /* ---------------- actions, forms, changes (merged into app.js) ---------------- */
 const VH_ACTS = {
+  'vh-prog': el => { vh.prog = el.dataset.v; render(); },
   'vh-tab': el => { vh.tab = el.dataset.v; if (vh.tab === 'setup') vh.status = null; render(); },
   'vh-reload': async () => { await vhReload(); render(); },
   'vh-week': el => { const v = +el.dataset.v; vh.week = v === 0 ? vhMonday() : addDays(vh.week || vhDefaultWeek(), 7 * v); render(); },
