@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.16-1';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.17-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -270,7 +270,24 @@ const teamMembers = teamId => state.members.filter(m => m.team === teamId && m.a
 const oversight = (role = state.role) => OVERSIGHT.includes(role);
 const ea = (role = state.role) => role === 'ea';
 const isAdmin = () => !!me()?.is_admin;
-const access = (section, role = state.role) => section === 'admin' ? isAdmin() : BASE_SECTIONS.includes(section) || (oversight(role) && OVERSIGHT_SECTIONS.includes(section)) || (EXTRA_SECTIONS[role] || []).includes(section);
+// Section access comes from the admin's grid (Admin → Permissions): a section opens if your club role OR
+// your team is ticked. Sections missing from the grid use the built-in defaults below.
+// The database enforces the same grid for the data-guarding sections (ENFORCED_SECTIONS).
+const PERM_SECTIONS = ['calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb', 'startups', 'budget', 'design', 'members'];
+const ENFORCED_SECTIONS = ['startups', 'budget', 'design', 'members'];
+const defaultSectionAccess = () => Object.fromEntries(PERM_SECTIONS.map(s => [s, {teams:[], roles:ROLES.map(r => r.id)
+  .filter(r => BASE_SECTIONS.includes(s) || (OVERSIGHT.includes(r) && OVERSIGHT_SECTIONS.includes(s)) || (EXTRA_SECTIONS[r] || []).includes(s))}]));
+function sectionAccess() {
+  const base = defaultSectionAccess(), saved = state?.settings?.sectionAccess || {};
+  PERM_SECTIONS.forEach(s => { if (saved[s]) base[s] = {roles:[...(saved[s].roles || [])], teams:[...(saved[s].teams || [])]}; });
+  return base;
+}
+const access = (section, role = state.role, team = me()?.team) => {
+  if (section === 'admin') return isAdmin();
+  if (section === 'overview') return true;
+  const a = sectionAccess()[section];
+  return !!a && (a.roles.includes(role) || a.teams.includes(team));
+};
 const canIdea = idea => !!idea && (oversight() || isAdmin() || idea.owner === me().id || idea.assigned.includes(me().id));
 // The owner is locked; only the owner or an admin deletes; owner + collaborators contribute.
 const canDeleteIdea = idea => !!idea && (idea.owner === me().id || isAdmin());

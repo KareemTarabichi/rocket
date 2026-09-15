@@ -680,6 +680,9 @@ const ACT = {
   search: () => openSearch(),
   'search-go': el => { const a = el.dataset.a; closeDialog(); if (a === 'go') return go(el.dataset.v); ACT[a]?.({dataset:{id:el.dataset.id, v:el.dataset.v}}); },
   'load-history': el => loadHistory(el.dataset.type, el.dataset.id),
+  'perm-save': () => { if (!isAdmin() || !permDraft) return; state.settings.sectionAccess = permDraft; permDraft = null; save(); render(); toast('Permissions saved', 'members see them the next time Rocket refreshes'); },
+  'perm-discard': () => { permDraft = null; render(); },
+  'perm-defaults': () => { permDraft = defaultSectionAccess(); render(); toast('Defaults loaded', 'press Save permissions to apply'); },
   'admin-tab': el => { adminTab = el.dataset.v; if (adminTab === 'links') adminData.calendar = null; render(); },
   'admin-links': () => { adminTab = 'links'; adminData.calendar = null; go('admin'); },
   'link-row-add': () => { $('#custom-links').insertAdjacentHTML('beforeend', customRow()); $('#custom-links .custom-row:last-child [data-cl]').focus(); },
@@ -722,6 +725,11 @@ document.addEventListener('keydown', e => {
 });
 
 const CHANGE = {
+  // Admin → Permissions grid: edits stay in a draft until "Save permissions"
+  perm: el => { if (!isAdmin()) return; permDraft ||= JSON.parse(JSON.stringify(sectionAccess()));
+    const list = permDraft[el.dataset.s][el.dataset.k], id = el.dataset.id;
+    permDraft[el.dataset.s][el.dataset.k] = el.checked ? [...new Set([...list, id])] : list.filter(x => x !== id);
+    const y = window.scrollY, x = document.querySelector('.pm-wrap')?.scrollLeft || 0; render(); window.scrollTo(0, y); const w = document.querySelector('.pm-wrap'); if (w) w.scrollLeft = x; },
   role: el => switchRole(el.value),
   complete: el => { if (completeItem(el.dataset.key, el.checked)) { render(); toast(el.checked ? 'Marked done' : 'Reopened', findItem(el.dataset.key)?.title); } else render(); },
   'idea-stage': el => { const i = state.ideas.find(x => x.id === el.dataset.id); if (!canIdea(i)) { toast('You can’t change this idea', '', true); return render(); }

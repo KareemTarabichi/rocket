@@ -21,10 +21,11 @@ async function loadAdmin(force) {
 }
 
 let adminTab = 'members';
-const adminTabs = () => `<div class="tabs" role="tablist">${[['members', 'Members'], ['links', 'Links']].map(([v, l]) => `<button role="tab" data-act="admin-tab" data-v="${v}" aria-selected="${adminTab === v}">${l}</button>`).join('')}</div>`;
+const adminTabs = () => `<div class="tabs" role="tablist">${[['members', 'Members'], ['links', 'Links'], ['permissions', 'Permissions']].map(([v, l]) => `<button role="tab" data-act="admin-tab" data-v="${v}" aria-selected="${adminTab === v}">${l}</button>`).join('')}</div>`;
 function vAdmin() {
   if (!isAdmin()) return '<div class="page"><div class="panel empty">Only admins can open this section.</div></div>';
   if (adminTab === 'links') return vAdminLinks();
+  if (adminTab === 'permissions') return vAdminPermissions();
   if (!LIVE) loadAdmin();
   else if (!adminData.members && !adminData.loading && !adminData.error) loadAdmin();
   const list = adminData.members;
@@ -228,3 +229,55 @@ function vAdminLinks() {
     </form>
   </div>`;
 }
+
+/* ---- Admin → Permissions: who can open which section, and the fixed rules ---- */
+let permDraft = null;   // unsaved grid edits
+const SECTION_NOTE = {calendar:'Everything with a date', meetings:'Invites decide which meetings you see', events:'', ideas:'', deadlines:'Your own items (leadership sees all)', notes:'Only notes shared with you',
+  kb:'Guides', startups:'Founder contacts', budget:'Money', design:'Creative requests', members:'Everyone’s details'};
+const permPeople = (a, s) => state.members.filter(m => m.active !== false && (a[s].roles.includes(m.role) || a[s].teams.includes(m.team)));
+function vAdminPermissions() {
+  const saved = sectionAccess(), a = permDraft || saved;
+  const changed = (s, kind, id) => (a[s][kind].includes(id)) !== (saved[s][kind].includes(id));
+  const dirty = PERM_SECTIONS.some(s => ['roles', 'teams'].some(k => JSON.stringify([...a[s][k]].sort()) !== JSON.stringify([...saved[s][k]].sort())));
+  const cnt = (field, v) => state.members.filter(m => m.active !== false && m[field] === v).length;
+  const head = PERM_SECTIONS.map(s => { const [, l, i] = SECTIONS.find(x => x[0] === s);
+    return `<th class="pm-col" title="${esc(SECTION_NOTE[s] || l)}"><span class="pm-colhead">${ic(i)}<span>${esc(l)}</span>${ENFORCED_SECTIONS.includes(s) ? `<span class="pm-lock" title="Enforced by the database">${ic('shield')}</span>` : ''}</span></th>`; }).join('');
+  const row = (kind, id, label, sub) => `<tr><th class="pm-row"><span class="pm-rowname">${esc(label)}</span><span class="faint">${sub}</span></th>${PERM_SECTIONS.map(s => `<td class="pm-cell ${changed(s, kind, id) ? 'changed' : ''}">
+      <input type="checkbox" data-change="perm" data-s="${s}" data-k="${kind}" data-id="${id}" ${a[s][kind].includes(id) ? 'checked' : ''} aria-label="${esc(label)} can open ${esc(sectionLabel(s))}"></td>`).join('')}</tr>`;
+  return `<div class="page">
+    ${heading('Admin', 'Choose which club roles and teams can open each section. A member gets a section if their role or their team is ticked.')}${adminTabs()}
+    <div class="pm-notes">
+      <span class="pm-chip">${ic('home')}<b>Overview</b> is always on for everyone</span>
+      <span class="pm-chip">${ic('shield')}<b>Admin</b> is for people with admin rights (set per person in Members)</span>
+      <span class="pm-chip">${ic('shield')}<b>Startups, Budget, Design, Members & teams</b> are enforced by the database — untick and the data is locked, not just hidden</span>
+      <span class="pm-chip faint-chip">The other sections only hide the tab and search results</span>
+    </div>
+    <div class="table-wrap pm-wrap"><table class="pm-table">
+      <thead><tr><th class="pm-corner">Who</th>${head}</tr></thead>
+      <tbody>
+        <tr class="pm-group"><th colspan="${PERM_SECTIONS.length + 1}">Club roles</th></tr>
+        ${ROLES.map(r => row('roles', r.id, r.label, `${cnt('role', r.id)} ${cnt('role', r.id) === 1 ? 'person' : 'people'}${OVERSIGHT.includes(r.id) ? ' · leadership' : ''}`)).join('')}
+        <tr class="pm-group"><th colspan="${PERM_SECTIONS.length + 1}">Teams <span class="faint" style="font-weight:400;text-transform:none;letter-spacing:0">— give a whole team access on top of their roles</span></th></tr>
+        ${TEAMS.map(tm => row('teams', tm.id, tm.name, `${cnt('team', tm.id)} ${cnt('team', tm.id) === 1 ? 'person' : 'people'}`)).join('')}
+      </tbody>
+      <tfoot><tr><th class="pm-row"><span class="pm-rowname">Can open it</span><span class="faint">active members</span></th>${PERM_SECTIONS.map(s => { const n = permPeople(a, s).length; return `<td class="pm-count ${n === 0 ? 'zero' : ''}" title="${esc(permPeople(a, s).map(m => m.name).join(', ') || 'Nobody')}">${n}</td>`; }).join('')}</tr></tfoot>
+    </table></div>
+    <div class="links-save"><span class="faint" style="font-size:13px;margin-right:auto">${dirty ? 'You have unsaved changes (highlighted).' : 'Saved. Members see changes the next time Rocket refreshes.'}</span>
+      <button type="button" class="btn btn-ghost" data-act="perm-defaults">Reset to defaults</button>
+      ${dirty ? '<button type="button" class="btn" data-act="perm-discard">Discard</button>' : ''}
+      <button type="button" class="btn btn-primary" data-act="perm-save" ${dirty ? '' : 'disabled'}>Save permissions</button></div>
+    <section class="panel"><div class="panel-head"><h2>How permissions work</h2><span class="faint" style="font-size:12.5px">Fixed rules, on top of the grid above</span></div>
+      <div class="pm-rules">${PERM_RULES.map(([area, rules]) => `<div class="pm-rule-group"><h3>${esc(area)}</h3><dl>${rules.map(([what, who]) => `<dt>${esc(what)}</dt><dd>${who}</dd>`).join('')}</dl></div>`).join('')}</div>
+      <div class="muted-note" style="padding:0 16px 14px"><b>Leadership</b> means the President, Vice President, Advisor and Executive Assistant. <b>Admin</b> is a separate switch per person and never grants club powers by itself.</div></section>
+  </div>`;
+}
+const PERM_RULES = [
+  ['Meetings', [['Schedule, edit, cancel, invite', 'Executive Assistant only'], ['See a meeting', 'Leadership sees all; everyone else sees meetings they or their team are invited to'], ['Connect Google Calendar', 'Admins or the Executive Assistant']]],
+  ['Events', [['Create an event', 'Everyone'], ['Edit an event and its checklist', 'Leadership, the person who created it, and its responsible team'], ['Tick off or move a checklist item', 'Its owner, plus the people who can edit the event'], ['Delete an event', 'Not available yet']]],
+  ['Ideas', [['Submit an idea', 'Everyone — you become its owner (locked)'], ['Edit an idea', 'Its owner, collaborators, leadership and admins'], ['Add contributions', 'Its owner and collaborators'], ['Delete an idea', 'Its owner or an admin']]],
+  ['Deadlines', [['See items', 'Leadership sees everyone’s; others see their own and ideas they collaborate on'], ['Tick an item off', 'Its owner (and leadership)'], ['Assign a follow-up to someone else', 'Leadership']]],
+  ['Startups & money', [['Add or edit a startup', 'Anyone with the Startup Directory section'], ['Delete a startup', 'Admins or the President (others can request it)'], ['Edit budget, expenses, reimbursements', 'Anyone with the Budget section']]],
+  ['Design', [['Create or edit a request', 'Anyone with the Design section'], ['Update the status of your own work', 'The person it’s assigned to']]],
+  ['Notes', [['See a note', 'Its owner and anyone it’s shared with (or the whole club, if opened up)'], ['Change who a note is shared with', 'Its owner'], ['Delete a note', 'Its owner or an admin']]],
+  ['People & settings', [['Edit responsibilities', 'Leadership'], ['Invite, remove, change roles, reset passwords', 'Admins'], ['Knowledge base, links, permissions', 'Admins']]],
+];
