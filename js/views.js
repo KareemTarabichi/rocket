@@ -155,9 +155,11 @@ function clubLinksPanel() {
 /* ================= meetings ================= */
 function meetingRow(m) {
   const n = recipients(m).length, ended = meetingEnded(m);
+  const clash = ea() && !ended ? meetingClashes(m) : {clashes:[], day:0};   // advisory marker for whoever runs meetings
   return `<div class="mt-row ${ended ? 'past' : ''}" data-act="open-meeting" data-id="${m.id}" tabindex="0">
     <div class="datebox"><div class="m">${fmtDate(m.date, {month:'short'})}</div><div class="d">${parseD(m.date).getDate()}</div></div>
     <div style="min-width:0"><div class="row-title">${esc(m.title)}</div><div class="row-sub">${fmtTime(m.start)}–${fmtTime(m.end)} · ${esc(m.location)}</div><div class="aud">${esc(audienceText(m))} · ${n} ${n === 1 ? 'person' : 'people'}${m.onCalendar ? ' · <span style="color:var(--cyan)">on Google Calendar</span>' : ''}</div></div>
+    ${clash.clashes.length ? `<span class="pill s-blocked" title="${esc(clash.clashes.map(c => clashLine(c, clash.day)).join(' · '))}">${clash.clashes.length} class clash${clash.clashes.length === 1 ? '' : 'es'}</span>` : ''}
     ${meetingLive(m) ? '<span class="pill live">Now</span>' : ended ? '<span class="pill e-done">Ended</span>' : daysFrom(m.date) === 0 ? '<span class="pill e-logistics">Today</span>' : `<span class="num faint" style="font-size:12px">${relDue(m.date)}</span>`}
   </div>`;
 }

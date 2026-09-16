@@ -1223,3 +1223,11 @@ dialog.dlg.search-pop[open]{display:flex}
   .sch-bar{gap:10px}
 }
 .sch-daychoice span{height:32px;padding:0 13px;font-family:var(--f-mono);font-size:12.5px}
+.banner.clash-warn{align-items:flex-start;gap:12px;color:var(--amber);line-height:1.5}
+.banner.clash-warn b{display:block;margin-bottom:4px}
+.banner.clash-warn ul{margin:0 0 8px;padding-left:18px;color:var(--text-primary);font-size:13px}
+.banner.clash-warn li{margin:2px 0}
+.banner.clash-warn .cbox{color:var(--amber);font-weight:500}
+.banner.clash-warn .cbox input{accent-color:var(--amber)}
+.checks .cbox.clash{color:var(--amber)}
+.clash-ok{color:var(--success)}

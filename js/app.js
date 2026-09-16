@@ -46,6 +46,7 @@ function openMeeting(id) {
         <div class="field"><span class="lbl">Individuals</span><div class="checks">${state.members.map(x => `<label class="cbox"><input type="checkbox" name="att" value="${x.id}" ${v.attendees.includes(x.id) || (v.teamIds.includes(x.team) && x.active !== false) ? 'checked' : ''}>${esc(x.name.split(' ')[0])} <span class="faint">${esc(roleLabel(x.role))}</span></label>`).join('')}</div></div>
         <span class="count-line" id="rcount"></span>
       </fieldset>
+      <div id="m-clash"></div>
       <span class="err" id="merr" role="alert"></span>
     </div>
     ${foot(`<button class="btn btn-primary">${m ? 'Save & notify' : 'Schedule & invite'}</button>`, m ? `<button type="button" class="btn btn-del" data-act="del-meeting" data-id="${m.id}">${ic('trash')}Delete meeting</button>` : '')}
@@ -65,6 +66,28 @@ function updateRecipientCount() {
   form.querySelectorAll('input[name=team], input[name=att]').forEach(i => i.disabled = a.mode === 'all');
   el.textContent = n ? `${n} unique ${n === 1 ? 'attendee' : 'attendees'}` : 'Pick at least one person or team';
   el.classList.toggle('zero', !n);
+  renderMeetingClashes(form);
+}
+// Warns the Executive Assistant when an attendee has class at that time. Recalculated on every change
+// to the date, the times or the invite list. It never changes the meeting — it just asks for a decision.
+function renderMeetingClashes(form) {
+  const box = $('#m-clash'); if (!box) return;
+  const fd = new FormData(form);
+  const m = {date:String(fd.get('date') || ''), start:String(fd.get('start') || ''), end:String(fd.get('end') || ''), ...formAudience(form)};
+  const {clashes, unknown, known, day} = meetingClashes(m);
+  const busy = new Set(clashes.map(c => c.member));
+  form.querySelectorAll('input[name=att]').forEach(i => i.closest('.cbox').classList.toggle('clash', busy.has(i.value)));
+  const sig = clashes.map(c => `${c.member}${c.title}${c.start}`).join('|');
+  const was = box.dataset.sig === sig && form.querySelector('[name=override]')?.checked;   // a new clash needs a fresh decision
+  box.dataset.sig = sig;
+  const names = ids => ids.map(id => member(id)?.name.split(' ')[0] || 'Someone').join(', ');
+  box.innerHTML = [
+    clashes.length ? `<div class="banner clash-warn"><div><b>Schedule conflict — ${busy.size} ${busy.size === 1 ? 'attendee has' : 'attendees have'} class then</b>
+        <ul>${clashes.map(c => `<li>${esc(clashLine(c, day))}${c.location ? ` <span class="faint">· ${esc(c.location)}</span>` : ''}</li>`).join('')}</ul>
+        <label class="cbox"><input type="checkbox" name="override" ${was ? 'checked' : ''}>Schedule anyway — I've checked with them</label></div></div>` : '',
+    unknown.length ? `<span class="muted-note">Schedule not provided — availability unknown: ${esc(names(unknown))}.</span>` : '',
+    !clashes.length && known.length ? `<span class="muted-note clash-ok">No class clashes for the ${known.length} attendee${known.length === 1 ? '' : 's'} with a timetable.</span>` : '',
+  ].join('');
 }
 
 /* ---------- event ---------- */
@@ -817,7 +840,7 @@ const CHANGE = {
 document.addEventListener('change', e => {
   const el = e.target;
   const mform = el.closest('form[data-form="meeting"]');
-  if (mform) { if (el.name === 'team' || el.name === 'att') syncMeetingTeams(mform, el); updateRecipientCount(); }
+  if (mform) { if (el.name === 'override') return; if (el.name === 'team' || el.name === 'att') syncMeetingTeams(mform, el); updateRecipientCount(); }
   if (el.name === 'overall') allocSum();
   if (el.dataset.change) return CHANGE[el.dataset.change]?.(el);
   syncDraft(el);
@@ -837,6 +860,7 @@ document.addEventListener('input', e => {
   if (el.dataset.input === 'search-q') { renderSearch(el.value); return; }
   if (el.dataset.input === 'kb-q') { filters.kb = el.value; $('#kb-results').innerHTML = kbResults(); return; }
   if (el.name === 'overall' || el.name?.startsWith('al_')) allocSum();
+  if (['date', 'start', 'end'].includes(el.name) && el.closest('form[data-form="meeting"]')) renderMeetingClashes(el.closest('form'));
   if (el.type !== 'checkbox' && el.type !== 'radio') syncDraft(el);
 });
 
@@ -852,8 +876,17 @@ const FORMS = {
     if (!rec.title || !rec.date || !rec.start || !rec.end || !rec.location || !rec.agenda) { err.textContent = 'Fill in the title, date, times, location and agenda.'; return; }
     if (rec.end <= rec.start) { err.textContent = 'The meeting has to end after it starts, on the same day.'; return; }
     const now = recipients(rec); if (!now.length) { err.textContent = 'Invite at least one person or team.'; return; }
+    // class clashes: the Executive Assistant either moves the meeting or says it's fine
+    const clash = meetingClashes(rec), people = new Set(clash.clashes.map(c => c.member)).size;
+    if (clash.clashes.length && !fd.get('override')) {
+      renderMeetingClashes(f);
+      err.textContent = `${people} ${people === 1 ? 'attendee has' : 'attendees have'} class at that time. Change the time, or tick “Schedule anyway”.`;
+      $('#m-clash')?.scrollIntoView({block:'nearest'});
+      return;
+    }
     const when = `${fmtDate(rec.date)} · ${fmtTime(rec.start)}–${fmtTime(rec.end)} · ${rec.location}`;
-    const liveNote = n => LIVE ? `${n} notified${state.calendar.connected ? ' · Google Calendar invite sent' : ''}` : `${n} notified (simulated)`;
+    const over = clash.clashes.length ? ` · over ${people} class clash${people === 1 ? '' : 'es'}` : '';
+    const liveNote = n => (LIVE ? `${n} notified${state.calendar.connected ? ' · Google Calendar invite sent' : ''}` : `${n} notified (simulated)`) + over;
     let nid;
     if (prev) { const union = [...new Set([...recipients(prev), ...now])]; nid = notify('update', `Meeting updated: ${rec.title}`, when, union); upsert(state.meetings, {...rec, onCalendar:prev.onCalendar}); finish('Meeting updated', liveNote(union.length)); }
     else { nid = notify('invite', `Meeting invitation: ${rec.title}`, when, now); upsert(state.meetings, rec); finish('Meeting scheduled', liveNote(now.length)); }

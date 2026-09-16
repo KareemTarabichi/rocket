@@ -190,7 +190,15 @@ Everyone's class timetable, so the club can see when people are actually free. O
 - **Same class on several days**: tick every day it runs when adding it, and Rocket creates one entry per day. To copy an existing one, open it and tick the days under **Copy to other days** — same time, room and semester. Each copy is its own entry, so you can change one day later without touching the rest, and copying a day that already has that class changes nothing.
 - **Team schedules**: filter by team or tick several people to compare timetables side by side, each in their own colour. You can only edit your own entries; the database enforces that. The **Executive Assistant** can also add and fix a timetable for someone who hasn't entered one.
 - **Common free time**: pick people and see the windows each weekday when none of them has class (8 AM–8 PM, minimum gap of your choice). Back-to-back classes don't create a gap. Anyone with no timetable is listed as "schedule not provided — availability unknown" and is never counted as free.
-- All times are plain **Gulf Standard Time**, the same way meetings are stored. Schedules never block or change a meeting — they're for planning only, and only the Executive Assistant still schedules meetings.
+- All times are plain **Gulf Standard Time**, the same way meetings are stored.
+
+**Class clashes when scheduling a meeting.** As the Executive Assistant fills in a meeting, Rocket checks the date and times against every attendee's timetable — people invited individually, through a team, or through "all members", each counted once. It warns, and nothing else: it never moves, blocks or cancels anything, and it doesn't change who can schedule meetings.
+
+- Each clash is named: "Dana has MGT 210 Management from 2:00 PM–3:15 PM on Tuesday", and those attendees turn amber in the invite list.
+- Any real overlap counts; back-to-back doesn't — a class ending at 10:45 and a meeting starting at 10:45 are fine.
+- Attendees with no timetable covering that date are listed as "schedule not provided — availability unknown", never as free.
+- Saving is blocked until the time changes or the EA ticks **Schedule anyway**. A new clash appearing clears that tick, so it always reflects what's on screen.
+- Upcoming meetings with clashes show a marker in the meetings list (Executive Assistant only). It's recalculated every time the page draws, so editing a timetable updates the markers by itself — no meeting is ever changed automatically.
 
 Run `supabase/migrations/20260919000000_schedules_and_event_deletion.sql` once to switch this on.
 

@@ -211,6 +211,28 @@ function openClass(id) {
     </div>${foot(`<button class="btn btn-primary">${id ? 'Save' : 'Add class'}</button>`, id ? `<button type="button" class="btn btn-del" data-act="sch-del" data-id="${esc(id)}">${ic('trash')}Delete</button>` : '')}</form>`, 'narrow');
 }
 
+/* ---------------- class clashes when scheduling a meeting ----------------
+   Advisory only: it warns the Executive Assistant, and never moves, blocks or changes anything else.
+   A clash is any real overlap; touching edges are fine (a class ending at 2:00 and a meeting starting
+   at 2:00 don't clash). Someone whose timetable doesn't cover that date counts as unknown, never free. */
+function meetingClashes(m) {
+  const out = {clashes:[], unknown:[], known:[], day:0};
+  if (!m || !m.date || !m.start || !m.end || mins(m.end) <= mins(m.start)) return out;
+  out.day = (parseD(m.date).getDay() + 6) % 7 + 1;
+  recipients(m).forEach(id => {
+    const rows = schedules().filter(r => r.member === id && schRuns(r, m.date));
+    if (!rows.length) return out.unknown.push(id);          // no timetable covering that date
+    out.known.push(id);
+    rows.filter(r => r.day_of_week === out.day && mins(r.start_time) < mins(m.end) && mins(m.start) < mins(r.end_time))
+      .forEach(r => out.clashes.push({member:id, title:r.title, start:String(r.start_time).slice(0, 5), end:String(r.end_time).slice(0, 5), location:r.location}));
+  });
+  return out;
+}
+const clashLine = (c, day) => `${member(c.member)?.name.split(' ')[0] || 'Someone'} has ${c.title} from ${fmtTime(c.start)}–${fmtTime(c.end)} on ${dayName(day)}`;
+// Upcoming meetings whose attendees have class then — recalculated every render, so editing a
+// timetable updates the warnings on their own without touching the meetings.
+const meetingClashCount = m => meetingEnded(m) ? 0 : meetingClashes(m).clashes.length;
+
 const newSchedId = () => (crypto.randomUUID ? crypto.randomUUID() : uid('cl'));
 // Copies a class onto other days — same time, room and semester. A day that already has the same
 // class at the same time is left alone, so copying twice never doubles anything up.
