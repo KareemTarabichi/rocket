@@ -27,7 +27,8 @@ const progressBlock = ev => { const d = ev.tasks.filter(t => t.done).length, n =
   return `<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span class="faint" style="font-size:12.5px">${d} of ${n} requirements</span><span class="pct">${p}%</span></div><div class="pbar" role="progressbar" aria-valuenow="${p}" aria-valuemin="0" aria-valuemax="100"><i style="width:${p}%"></i></div></div>`; };
 const LOGO = `<svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#1D1B26"/><path d="M14 5 21 21 14 17.5 7 21Z" fill="none" stroke="#4DD9E8" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 17.5V23" stroke="#F5B942" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const BRAND = `<div class="brand">${LOGO}<span class="brand-text"><span class="brand-name">Rocket</span><span class="brand-org">AUS Launchpad</span></span></div>`;
-const roleSelect = id => `<select class="input" id="${id}" data-change="role" aria-label="Demo role">${ROLES.map(r => opt(r.id, `${r.label} — ${state.members.find(m => m.role === r.id).name}`, state.role)).join('')}</select>`;
+const roleSelect = id => `<select class="input" id="${id}" data-change="role" aria-label="Demo role">${ROLES.filter(r => state.members.some(m => m.role === r.id))
+  .map(r => opt(r.id, `${r.label} — ${state.members.find(m => m.role === r.id).name}`, state.role)).join('')}</select>`;
 
 /* ================= shell ================= */
 const TABS = ['overview', 'calendar', 'events', 'deadlines'];

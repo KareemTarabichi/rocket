@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.19-2';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.20-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -64,7 +64,8 @@ const isM = () => mq.matches;
 const ROLES = [
   {id:'president', label:'President'}, {id:'vp', label:'Vice President'}, {id:'advisor', label:'Advisor'}, {id:'ea', label:'Executive Assistant'},
   {id:'treasurer', label:'Treasurer'}, {id:'startup', label:'Startup Coordinator'}, {id:'pr', label:'PR'}, {id:'tech', label:'Tech'},
-  {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'}];
+  {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'},
+  {id:'member', label:'Team Member'}];   // a general member of any team: the shared sections, nothing role-specific
 const roleLabel = r => ROLES.find(x => x.id === r)?.label || r;
 const OVERSIGHT = ['president', 'vp', 'advisor', 'ea'];
 const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb', 'schedules'];
@@ -106,7 +107,8 @@ function seed() {
     M('m9','Mariam Qasim','media','creative','g00105560@aus.edu','Photo and video coverage, reels and recaps.'),
     M('m10','Sara Iqbal','design','creative','g00098215@aus.edu','Posters, signage and social templates.'),
     M('m11','Ali Rahman','innovation','innovation','g00102289@aus.edu','Runs new programmes and shepherds ideas through the pipeline.'),
-    M('m12','Rana Said','media','creative','g00107713@aus.edu','Event photography.')];
+    M('m12','Rana Said','media','creative','g00107713@aus.edu','Event photography.'),
+    M('m13','Salem Darwish','member','innovation','g00108842@aus.edu','Helps out across programmes and events.')];
   // platform-admin demo data: Zaid (Tech) is the admin; Rana was invited and hasn't signed in yet
   const hoursAgo = h => new Date(Date.now() - h * 36e5).toISOString();
   members.forEach((m, i) => Object.assign(m, {is_admin:m.id === 'm8', active:true, last_sign_in_at:hoursAgo(2 + i * 7), invited_at:hoursAgo(24 * 30)}));

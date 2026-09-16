@@ -176,6 +176,12 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
    `supabase functions deploy google-calendar --use-api --no-verify-jwt`
 6. Sign in to Rocket as the Executive Assistant → **Meetings → Connect Google Calendar** → pick the club Google account.
 
+## Club roles
+
+President, Vice President, Advisor, Executive Assistant, Treasurer, Startup Coordinator, PR, Tech, Media, Graphic Design, Innovation, and **Team Member** — a general member of any team, and the default for new invites. A Team Member gets the shared sections (Overview, Calendar, Meetings, Events, Ideas, Deadlines, Notes, Schedules, Knowledge Base) and none of the role-specific ones until an admin ticks more in Admin → Permissions. Teams are unchanged: Leadership, Finance, Startups, Creative, Tech, Innovation.
+
+Adding the role to the live database needs `supabase/migrations/20260920000000_team_member_role.sql`, run on its own (Postgres won't add and use an enum value in one transaction), plus a redeploy of the admin-users function so invites accept it.
+
 ## Schedules
 
 Everyone's class timetable, so the club can see when people are actually free. On for every role by default.

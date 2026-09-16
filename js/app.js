@@ -630,7 +630,9 @@ function render() {
 function switchRole(role) {   // demo only — in live mode your role comes from your account
   if (LIVE || !ROLES.some(r => r.id === role)) return;
   cancelDeletion(); closeDialog();
-  state.role = role; state.meId = state.members.find(m => m.role === role && m.active !== false)?.id || state.members.find(m => m.role === role).id; save(); view = 'overview'; render(); window.scrollTo(0, 0);
+  const who = state.members.find(m => m.role === role && m.active !== false) || state.members.find(m => m.role === role);
+  if (!who) return toast(`No demo member has the ${roleLabel(role)} role`, '', true);
+  state.role = role; state.meId = who.id; save(); view = 'overview'; render(); window.scrollTo(0, 0);
   toast(`Now viewing as ${roleLabel(role)}`, me().name);
 }
 

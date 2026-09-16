@@ -64,7 +64,7 @@ function openAdminInvite() {
     <div class="dlg-body">
       ${field('Full name', inp('name', '', 'required autocomplete="off"'), 'f-name')}
       ${field('AUS email', inp('email', '', 'type="email" required placeholder="g000xxxxx@aus.edu" autocomplete="off"'), 'f-email')}
-      <div class="grid2">${field('Club role', `<select class="input" id="f-role" name="role">${ROLES.map(r => opt(r.id, r.label, 'innovation')).join('')}</select>`, 'f-role')}${field('Team', `<select class="input" id="f-team" name="team">${teamOpts('innovation')}</select>`, 'f-team')}</div>
+      <div class="grid2">${field('Club role', `<select class="input" id="f-role" name="role">${ROLES.map(r => opt(r.id, r.label, 'member')).join('')}</select>`, 'f-role')}${field('Team', `<select class="input" id="f-team" name="team">${teamOpts('innovation')}</select>`, 'f-team')}</div>
       <label class="cbox"><input type="checkbox" name="is_admin">Also make them an admin <span class="faint">— can add, edit and remove members</span></label>
       <span class="err" id="aerr" role="alert"></span>
     </div>${foot('<button class="btn btn-primary">Send invite</button>')}</form>`, 'narrow');

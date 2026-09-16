@@ -2,7 +2,7 @@
 // which never reaches the browser. Only signed-in, active admins can call it.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ROLES = ['president', 'vp', 'advisor', 'ea', 'treasurer', 'startup', 'pr', 'tech', 'media', 'design', 'innovation'];
+const ROLES = ['president', 'vp', 'advisor', 'ea', 'treasurer', 'startup', 'pr', 'tech', 'media', 'design', 'innovation', 'member'];
 const TEAMS = ['leadership', 'finance', 'startups', 'creative', 'tech', 'innovation'];
 
 const cors = {
