@@ -163,7 +163,7 @@ async function installNow() {
    An installed app (or a tab left open) keeps running the code it started with. When Rocket comes back to
    the foreground, compare the server's fingerprints (ETags) of its files with the ones it loaded; if a new
    version was deployed, reload — straight away if nothing is open, otherwise offer it. */
-const BUILD_FILES = ['/js/core.js', '/js/views.js', '/js/views-more.js', '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/notes.js', '/js/venture.js', '/js/app.js', '/styles.css', '/config.js'];
+const BUILD_FILES = ['/js/core.js', '/js/views.js', '/js/views-more.js', '/js/admin.js', '/js/live.js', '/js/pwa.js', '/js/ptr.js', '/js/notes.js', '/js/venture.js', '/js/schedules.js', '/js/app.js', '/styles.css', '/config.js'];
 let bootBuild = null, lastBuildCheck = 0;
 async function buildFingerprint() {
   if (!/^https?:$/.test(location.protocol)) return null;

@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.18-2';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.19-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -52,6 +52,7 @@ const ICON = {
   chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   note:'<path d="M5 3h10l4 4v14H5z"/><path d="M15 3v4h4M8 12h8M8 16h5"/>',
+  sched:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 9v12M15 9v12M7 2v4M17 2v4"/>',
   spark:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="2.6"/>',
   grid:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 17h.01M12 17h.01"/>'
 };
@@ -66,11 +67,11 @@ const ROLES = [
   {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'}];
 const roleLabel = r => ROLES.find(x => x.id === r)?.label || r;
 const OVERSIGHT = ['president', 'vp', 'advisor', 'ea'];
-const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb'];
+const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb', 'schedules'];
 const OVERSIGHT_SECTIONS = ['startups', 'budget', 'design', 'members', 'programmes'];
 const EXTRA_SECTIONS = {treasurer:['budget'], startup:['startups'], pr:['design'], innovation:['programmes']};
 const SECTIONS = [
-  ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'], ['notes','Notes','note'], ['programmes','Programmes','spark'],
+  ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'], ['notes','Notes','note'], ['schedules','Schedules','sched'], ['programmes','Programmes','spark'],
   ['startups','Startup Directory','rocket'], ['budget','Budget','coins'], ['design','Design','image'], ['members','Members & teams','team'], ['kb','Knowledge Base','book'], ['admin','Admin','shield']];
 const sectionLabel = s => SECTIONS.find(x => x[0] === s)?.[1] || s;
 const TEAMS = [
@@ -197,7 +198,7 @@ function seed() {
     C('i4', 'm11', 20, 'Problem statements', 'Pull three problems from the startup directory notes so teams build for real founders.'),
     C('i4', 'm6', 3, 'Judges', 'Yousef can bring two founders from the directory to judge on the last day.')];
   return {version:2, role:'ea', meId:'m4', ideaComments, members, meetings, events, tasks, ideas, designs, budget, startups, notifications, adminLog, kb,
-    settings:{designDriveUrl:'', links:emptyLinks()}, calendar:{connected:false, email:''}, venture:vhSeed()};
+    settings:{designDriveUrl:'', links:emptyLinks()}, calendar:{connected:false, email:''}, venture:vhSeed(), schedules:schedSeed(members)};
 }
 
 /* ================= state & persistence ================= */
@@ -207,7 +208,7 @@ let state = null;   // live mode: filled from Supabase after sign-in
 function initDemoState() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.version === 2 && Array.isArray(s.members) && s.meId && s.adminLog && s.kb && s.settings) state = s; } } catch (e) { storageOk = false; }
   if (!state) state = seed();
-  ensureLinks(); state.ideaComments ||= []; state.venture ||= vhSeed();
+  ensureLinks(); state.ideaComments ||= []; state.venture ||= vhSeed(); state.schedules ||= schedSeed(state.members);
   if (!state.notes) {   // example notes for the demo
     const at = h => new Date(Date.now() - h * 36e5).toISOString(), N = (id, owner, h, title, body, share = {}) => ({id, title, body, owner, editors:[], viewers:[], club_access:'none', version:1, updated_at:at(h), updated_by:owner, created_at:at(h + 48), ...share});
     state.notes = [
@@ -236,6 +237,7 @@ const filters = {
   startups:{q:'', sector:'all', att:'all', missing:false, view:'table'},
   design:'open', kb:'',
   notes:{q:'', tab:'all'},
+  sched:{view:'mine', team:'all', people:[], week:null, day:0, min:60},
   cal:{cursor:null, sel:null, mine:false, types:{meeting:true, event:true, task:true, idea:true, design:true, programme:true}}
 };
 function save() {
@@ -274,7 +276,7 @@ const isAdmin = () => !!me()?.is_admin;
 // Section access comes from the admin's grid (Admin → Permissions): a section opens if your club role OR
 // your team is ticked. Sections missing from the grid use the built-in defaults below.
 // The database enforces the same grid for the data-guarding sections (ENFORCED_SECTIONS).
-const PERM_SECTIONS = ['calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb', 'programmes', 'startups', 'budget', 'design', 'members'];
+const PERM_SECTIONS = ['calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'schedules', 'kb', 'programmes', 'startups', 'budget', 'design', 'members'];
 const ENFORCED_SECTIONS = ['programmes', 'startups', 'budget', 'design', 'members'];
 const defaultSectionAccess = () => Object.fromEntries(PERM_SECTIONS.map(s => [s, {teams:[], roles:ROLES.map(r => r.id)
   .filter(r => BASE_SECTIONS.includes(s) || (OVERSIGHT.includes(r) && OVERSIGHT_SECTIONS.includes(s)) || (EXTRA_SECTIONS[r] || []).includes(s))}]));
@@ -296,6 +298,9 @@ const canCommentIdea = idea => !!idea && (idea.owner === me().id || idea.assigne
 const ideaOf = c => state.ideas.find(i => i.id === c?.ideaId);
 const canDeleteComment = c => !!c && (c.author === me().id || ideaOf(c)?.owner === me().id || isAdmin());
 const commentsFor = ideaId => (state.ideaComments || []).filter(c => c.ideaId === ideaId).sort((a, b) => a.at.localeCompare(b.at));
+// Deleting an event takes its checklist, design requests and money with it, so it's kept to the
+// Executive Assistant (who runs the calendar) and admins.
+const canDeleteEvent = () => ea() || isAdmin();
 const canEvent = ev => !!ev && (oversight() || ev.createdBy === me().id || teamMembers(ev.team).includes(me().id));
 const canTask = item => !!item && (oversight() || item.owners.includes(me().id));
 const canDesignStatus = d => access('design') || d.owner === me().id;
@@ -308,6 +313,7 @@ function deletable(kind, rec) {
   if (kind === 'comment') return canDeleteComment(rec);
   if (kind === 'note') return canDeleteNote(rec);
   if (kind === 'startup') return canApproveStartupDeletion();
+  if (kind === 'event') return canDeleteEvent();
   if (kind === 'kb') return isAdmin();
   if (kind === 'member') { const list = adminData.members || state.members;
     return isAdmin() && rec.id !== me().id && !(rec.is_admin && rec.active !== false && list.filter(m => m.is_admin && m.active !== false).length <= 1); }

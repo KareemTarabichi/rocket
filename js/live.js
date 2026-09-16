@@ -23,6 +23,8 @@ const COLLECTIONS = [
   {key:'designs', table:'designs', mode:'upsert-no-delete', get:() => state.designs, to:d => ({id:d.id, title:d.title, event_id:d.event || null, campaign:d.campaign || '', brief:d.brief, deliverables:d.deliverables || '', owner:d.owner || null, due:d.due, status:d.status, previous_status:d.previousStatus || null})},
   {key:'startups', table:'startups', get:() => state.startups, to:s => ({id:s.id, name:s.name, sector:s.sector || '', notes:s.notes || '', attendance:s.attendance, contacts:s.contacts, rating:s.rating ?? null,
     deletion_requested_by:s.deletion?.by || null, deletion_requested_at:s.deletion?.at || null, deletion_reason:s.deletion?.reason || ''})},
+  {key:'schedules', table:'class_schedules', get:() => state.schedules || [], to:r => ({id:r.id, member:r.member, title:r.title, day_of_week:r.day_of_week, start_time:r.start_time, end_time:r.end_time,
+    location:r.location || '', term_start:r.term_start || null, term_end:r.term_end || null, created_by:r.created_by || null})},
   {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || '', links:state.settings.links || {}, section_access:state.settings.sectionAccess || null})},
   {key:'kb', table:'kb_articles', get:() => state.kb, to:a => ({id:a.id, title:a.title, category:a.category, roles:a.roles, summary:a.summary || '', body:a.body, updated_by:a.updatedBy || null, updated_at:a.updatedAt})},
   {key:'expenses', table:'expenses', mode:'upsert-no-delete', get:() => state.budget.expenses, to:e => ({id:e.id, name:e.name, event_id:e.event || null, planned:+e.planned || 0, actual:+e.actual || 0, receipt:e.receipt || ''})},
@@ -37,6 +39,7 @@ function takeSnapshot() {
 async function buildState(userId) {
   const q = t => sb.from(t).select('*');
   const ventureP = loadVenture().catch(e => ({error:e.message}));   // loads separately: a missing programme never blocks Rocket
+  const schedP = sb.from('class_schedules').select('*').then(r => r.error ? [] : r.data.map(x => ({...x, start_time:t5(x.start_time), end_time:t5(x.end_time)}))).catch(() => []);
   const res = await Promise.all([
     q('profiles').order('name'), q('meetings'), sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100),
     q('calendar_settings').eq('id', 1).maybeSingle(), q('events').order('date'), q('event_requirements').order('position'), q('tasks'), q('ideas').order('created_at'),
@@ -62,6 +65,7 @@ async function buildState(userId) {
     kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
     settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}, sectionAccess:st?.section_access || null},
     notes:(nt || []).map(normNote),
+    schedules:await schedP,
     ideaComments:(ic || []).map(x => ({id:x.id, ideaId:x.idea_id, author:x.author, title:x.title, body:x.body, at:x.created_at})),
     budget:{overall:+(bs?.overall || 0), allocations:bs?.allocations || {},
       expenses:ex.map(x => ({id:x.id, name:x.name, event:x.event_id || '', planned:+x.planned, actual:+x.actual, receipt:x.receipt})),

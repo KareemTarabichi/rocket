@@ -1161,3 +1161,64 @@ dialog.dlg.search-pop[open]{display:flex}
   .vh-tabs button{flex:none}
 }
 .vh-log .tag{white-space:nowrap}
+
+/* ================= schedules ================= */
+.sch-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.sch-picker{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end}
+.sch-picker select.input{width:auto;min-width:150px}
+.sch-chip i{width:10px;height:10px;border-radius:3px;border:1.5px solid;display:inline-block;margin-right:6px;vertical-align:-1px}
+.sch-panel{padding:14px 16px}
+.sch-grid{display:grid;grid-template-columns:58px minmax(0,1fr);gap:0 8px;--slot:22px}
+.sch-times{position:relative;margin-top:38px;height:var(--h)}
+.sch-times span{position:absolute;right:4px;transform:translateY(-50%);font:500 11px var(--f-mono);color:var(--text-faint);white-space:nowrap}
+.sch-days{display:grid;grid-auto-rows:min-content}
+.sch-dayhead{height:34px;display:flex;align-items:baseline;justify-content:center;gap:6px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)}
+.sch-dayhead b{font:600 13px var(--f-display);color:var(--text-primary)}
+.sch-dayhead.is-today{box-shadow:inset 0 -2px 0 var(--cyan)}
+.sch-dayhead.is-today b{color:var(--cyan)}
+.sch-col{position:relative;height:var(--h);margin-top:4px;border-left:1px solid var(--border);
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--slot) * 2 - 1px),var(--border) calc(var(--slot) * 2 - 1px),var(--border) calc(var(--slot) * 2))}
+.sch-col:last-child{border-right:1px solid var(--border)}
+.sch-block{position:absolute;border-radius:6px;padding:4px 7px;overflow:hidden;display:flex;flex-direction:column;gap:1px;line-height:1.25;
+  background:color-mix(in srgb,var(--h) 16%,var(--surface));border:1px solid color-mix(in srgb,var(--h) 45%,transparent);border-left:3px solid var(--h)}
+.sch-block b{font:600 12px var(--f-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sch-block span{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sch-block .sch-who{color:var(--h);font-weight:500}
+.sch-block.click{cursor:pointer}
+.sch-block.click:hover{background:color-mix(in srgb,var(--h) 26%,var(--surface))}
+.sch-legend{display:flex;gap:14px;flex-wrap:wrap;padding:14px 4px 2px;font-size:12.5px;color:var(--text-muted)}
+.sch-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
+.sch-list{list-style:none;margin:0;padding:0}
+.sch-list li{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--border)}
+.sch-list li:first-child{border-top:0}
+.sch-list li[data-act]{cursor:pointer}
+.sch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.sch-row-main b{font-weight:500}
+.sch-row-main span{font-size:12.5px}
+.sch-term{font-size:11.5px}
+.sch-off{opacity:.55}
+.sch-row-acts{display:flex;gap:4px;flex:none}
+.sch-dot{width:10px;height:10px;border-radius:3px;flex:none}
+.sch-daypick{margin-bottom:-4px}
+.sch-unknown{align-items:flex-start;line-height:1.5}
+.sch-unknown b{font-weight:500}
+.sch-free{display:flex;flex-direction:column}
+.sch-free-day{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:12px 16px;border-top:1px solid var(--border);align-items:start}
+.sch-free-day:first-child{border-top:0}
+.sch-free-name{display:flex;flex-direction:column;font-weight:500;font-size:13.5px}
+.sch-free-name span{font-size:12px}
+.sch-free-list{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sch-gap{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:99px;background:var(--success-soft);color:var(--success);font-size:13px;font-weight:500}
+.sch-gap i{font-style:normal;font-size:11.5px;opacity:.75;font-family:var(--f-mono)}
+.sch-gap.big{background:rgba(74,222,128,.22)}
+.del-sum{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--text-muted)}
+.del-sum b{color:var(--text-primary);font-family:var(--f-mono)}
+.del-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.del-list li{display:flex;justify-content:space-between;gap:12px;padding:7px 10px;border-radius:var(--r-sm);background:var(--surface-raised)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:760px){
+  .sch-picker{justify-content:flex-start;width:100%}
+  .sch-picker select.input{width:100%}
+  .sch-free-day{grid-template-columns:1fr;gap:8px}
+  .sch-bar{gap:10px}
+}

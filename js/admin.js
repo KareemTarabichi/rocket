@@ -233,7 +233,7 @@ function vAdminLinks() {
 /* ---- Admin → Permissions: who can open which section, and the fixed rules ---- */
 let permDraft = null;   // unsaved grid edits
 const SECTION_NOTE = {calendar:'Everything with a date', meetings:'Invites decide which meetings you see', events:'', ideas:'', deadlines:'Your own items (leadership sees all)', notes:'Only notes shared with you',
-  kb:'Guides', programmes:'The Venture Hour: mentors, students, surveys', startups:'Founder contacts', budget:'Money', design:'Creative requests', members:'Everyone’s details'};
+  kb:'Guides', schedules:'Class timetables — everyone reads, you edit your own', programmes:'The Venture Hour: mentors, students, surveys', startups:'Founder contacts', budget:'Money', design:'Creative requests', members:'Everyone’s details'};
 const permPeople = (a, s) => state.members.filter(m => m.active !== false && (a[s].roles.includes(m.role) || a[s].teams.includes(m.team)));
 function vAdminPermissions() {
   const saved = sectionAccess(), a = permDraft || saved;
@@ -273,10 +273,12 @@ function vAdminPermissions() {
 }
 const PERM_RULES = [
   ['Meetings', [['Schedule, edit, cancel, invite', 'Executive Assistant only'], ['See a meeting', 'Leadership sees all; everyone else sees meetings they or their team are invited to'], ['Connect Google Calendar', 'Admins or the Executive Assistant']]],
-  ['Events', [['Create an event', 'Everyone'], ['Edit an event and its checklist', 'Leadership, the person who created it, and its responsible team'], ['Tick off or move a checklist item', 'Its owner, plus the people who can edit the event'], ['Delete an event', 'Not available yet']]],
+  ['Events', [['Create an event', 'Everyone'], ['Edit an event and its checklist', 'Leadership, the person who created it, and its responsible team'], ['Tick off or move a checklist item', 'Its owner, plus the people who can edit the event'], ['Delete an event', 'The Executive Assistant or an admin — it also deletes its checklist, design requests, expenses and reimbursements']]],
   ['Ideas', [['Submit an idea', 'Everyone — you become its owner (locked)'], ['Edit an idea', 'Its owner, collaborators, leadership and admins'], ['Add contributions', 'Its owner and collaborators'], ['Delete an idea', 'Its owner or an admin']]],
   ['Deadlines', [['See items', 'Leadership sees everyone’s; others see their own and ideas they collaborate on'], ['Tick an item off', 'Its owner (and leadership)'], ['Assign a follow-up to someone else', 'Leadership']]],
   ['Startups & money', [['Add or edit a startup', 'Anyone with the Startup Directory section'], ['Delete a startup', 'Admins or the President (others can request it)'], ['Edit budget, expenses, reimbursements', 'Anyone with the Budget section']]],
+  ['Schedules', [['See everyone’s class timetable', 'Anyone with the Schedules section'], ['Add or edit a timetable', 'Its owner — plus the Executive Assistant, who can fill one in for someone'],
+    ['Effect on meetings', 'None — schedules are for planning only and never block or change a meeting']]],
   ['Programmes', [['Run The Venture Hour: mentors, slots, sign-ups, surveys, settings', 'Anyone with the Programmes section'], ['Book a student into a slot', 'Rocket does it, first come first served — from the Google Form or “Add a sign-up”'],
     ['Book again after a session', 'Only once the student has filled the post-meeting survey'], ['Fill a post-meeting survey', 'The student, from their private link']]],
   ['Design', [['Create or edit a request', 'Anyone with the Design section'], ['Update the status of your own work', 'The person it’s assigned to']]],

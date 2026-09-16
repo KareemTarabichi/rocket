@@ -87,7 +87,7 @@ function openEvent(id) {
           <span class="due-ctl">${own ? `<input class="input" type="date" value="${t.due}" data-change="req-due" data-ev="${ev.id}" data-id="${t.id}" aria-label="Due date">` : `<span class="dd num faint" style="font-size:12.5px">${fmtDate(t.due)}</span>`}</span></div>`; }).join('') || '<span class="faint">No requirements yet.</span>'}</div>
       ${designs.length ? `<div class="sect"><span class="eyebrow">Design work</span>${designs.map(d => `<div class="req-view"><span></span><span class="t">${esc(d.title)}</span><span class="own team-lbl">${esc(member(d.owner)?.name)}</span>${canDesignStatus(d) ? `<button type="button" class="btn sm" data-act="open-design" data-id="${d.id}">${designBadge(d.status)}</button>` : designBadge(d.status)}</div>`).join('')}</div>` : ''}
       ${historyBox('event', ev.id)}
-    </div>${foot('')}`);
+    </div>${foot('', canDeleteEvent() ? `<button type="button" class="btn btn-del" data-act="del-event" data-id="${ev.id}">${ic('trash')}Delete event</button>` : '')}`);
 }
 function renderEventForm() {
   const v = draft, isNew = !!v._new, designs = state.designs.filter(d => d.event === v.id);
@@ -108,7 +108,7 @@ function renderEventForm() {
       ${designs.length ? `<div class="sect"><span class="eyebrow">Design work for this event</span>${designs.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>${esc(d.title)} <span class="faint">· ${esc(member(d.owner)?.name)}</span></span>${designBadge(d.status)}</div>`).join('')}</div>` : ''}
       <span class="err" id="eerr" role="alert"></span>
       ${isNew ? '' : historyBox('event', v.id)}
-    </div>${foot(`<button class="btn btn-primary">${isNew ? 'Create event' : 'Save event'}</button>`)}
+    </div>${foot(`<button class="btn btn-primary">${isNew ? 'Create event' : 'Save event'}</button>`, !isNew && canDeleteEvent() ? `<button type="button" class="btn btn-del" data-act="del-event" data-id="${v.id}">${ic('trash')}Delete event</button>` : '')}
   </form>`;
   const keep = dlg().open ? dlg().scrollTop : 0;
   openDialog(html); dlg().scrollTop = keep;
@@ -382,7 +382,7 @@ function openNotifications() {
 
 /* ================= deletion ================= */
 const deletionRecord = (kind, id) => ({meeting:state.meetings, idea:state.ideas, startup:state.startups, kb:state.kb, comment:state.ideaComments, note:state.notes}[kind] || adminData.members || state.members).find(x => x.id === id);
-const DENY = {meeting:'Only the Executive Assistant can delete meetings', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the idea’s owner or an admin can delete it', comment:'Only its author, the idea owner or an admin can delete this', note:'Only the note’s owner or an admin can delete it'};
+const DENY = {meeting:'Only the Executive Assistant can delete meetings', event:'Only the Executive Assistant or an admin can delete an event', member:'You can’t remove yourself or the last admin', startup:'Deleting a startup needs an admin or the President', kb:'Only admins can delete articles', idea:'Only the idea’s owner or an admin can delete it', comment:'Only its author, the idea owner or an admin can delete this', note:'Only the note’s owner or an admin can delete it'};
 function requestDeletion(kind, id) {
   const rec = deletionRecord(kind, id);
   if (!deletable(kind, rec)) { toast(DENY[kind], '', true); return; }
@@ -405,6 +405,7 @@ function requestDeletion(kind, id) {
 function cancelDeletion() { pendingDeletion = null; const c = $('#confirm'); if (c.open) c.close(); }
 function confirmDeletion() {
   const p = pendingDeletion; if (!p) return cancelDeletion();
+  if (p.kind === 'event') return deleteEventNow(p.id);
   const rec = deletionRecord(p.kind, p.id);
   if (!deletable(p.kind, rec)) { cancelDeletion(); toast('That can’t be deleted with your current role', '', true); return; }
   if (p.kind === 'member') { cancelDeletion(); return runAdmin('remove', {id:rec.id}, `Removed ${rec.name}`, rec.email); }
@@ -426,6 +427,64 @@ function confirmDeletion() {
   finish(p.kind === 'meeting' ? `Deleted “${rec.title}”` : `Deleted idea “${rec.title}”`,
     p.kind === 'meeting' ? `cancellation sent to ${recipients(rec).length}${LIVE ? (rec.onCalendar ? ' · calendar event cancelled' : '') : ' (simulated)'}` : 'next step removed from Deadlines');
   if (cancelId) afterSync(() => fnApi('push', 'notification', {id:cancelId}).catch(() => {}));
+}
+
+/* ---------- deleting an event: it takes everything filed against it ---------- */
+const eventDeletionItems = ev => ({
+  name:ev.name,
+  requirements:ev.tasks.length,
+  designs:state.designs.filter(d => d.event === ev.id).map(d => ({title:d.title, status:d.status})),
+  expenses:state.budget.expenses.filter(x => x.event === ev.id).map(x => ({name:x.name, planned:+x.planned || 0, actual:+x.actual || 0})),
+  reimbursements:state.budget.reimbursements.filter(r => r.event === ev.id).map(r => ({name:r.name, amount:+r.amount || 0, status:r.status, member:r.member})),
+  allocation:+state.budget.allocations[ev.id] || 0,
+});
+async function openEventDeletion(id) {
+  const ev = eventById(id);
+  if (!ev) return;
+  if (!canDeleteEvent()) return toast(DENY.event, '', true);
+  let d = eventDeletionItems(ev);
+  // In live mode ask the server what's attached right now, in case someone added an expense since your last refresh.
+  if (LIVE) { try { const {data} = await sb.rpc('event_deletion_preview', {p_event:id}); if (data) d = data; } catch (e) {} }
+  const money = d.expenses.reduce((s, x) => s + Math.max(+x.actual || 0, +x.planned || 0), 0) + d.reimbursements.filter(r => r.status !== 'Rejected').reduce((s, r) => s + (+r.amount || 0), 0);
+  const list = (title, items, row) => items.length ? `<div class="sect"><span class="eyebrow">${title} · ${items.length}</span><ul class="del-list">${items.map(row).join('')}</ul></div>` : '';
+  const c = $('#confirm');
+  pendingDeletion = {kind:'event', id};
+  c.innerHTML = `<div class="dlg-head"><div style="flex:1"><h2>Delete “${esc(d.name)}”?</h2><div class="sub">Everything below is deleted for everyone, permanently.</div></div></div>
+    <div class="dlg-body">
+      <div class="del-sum"><span><b>${d.requirements}</b> checklist item${d.requirements === 1 ? '' : 's'}</span><span><b>${d.designs.length}</b> design request${d.designs.length === 1 ? '' : 's'}</span>
+        <span><b>${d.expenses.length}</b> expense${d.expenses.length === 1 ? '' : 's'}</span><span><b>${d.reimbursements.length}</b> reimbursement${d.reimbursements.length === 1 ? '' : 's'}</span></div>
+      ${list('Design requests', d.designs, x => `<li><span>${esc(x.title)}</span><span class="faint">${esc(DESIGN_LABEL[x.status] || x.status)}</span></li>`)}
+      ${list('Expenses', d.expenses, x => `<li><span>${esc(x.name)}</span><span class="num">${aed(+x.actual || +x.planned)}${+x.actual ? '' : ' planned'}</span></li>`)}
+      ${list('Reimbursements', d.reimbursements, x => `<li><span>${esc(x.name)}${x.member && member(x.member) ? ` <span class="faint">· ${esc(member(x.member).name.split(' ')[0])}</span>` : ''}</span><span class="num">${aed(x.amount)} · ${esc(x.status)}</span></li>`)}
+      ${money || d.allocation ? `<p class="prose" style="margin:0;color:var(--ember)">${money ? `${aed(money)} of spending disappears from the Budget` : ''}${money && d.allocation ? ', and its ' : d.allocation ? 'Its ' : ''}${d.allocation ? `${aed(d.allocation)} allocation is freed up` : ''}.</p>` : ''}
+      <p class="prose" style="margin:0">The change history keeps a record that it was deleted, and by whom.</p>
+    </div>
+    <div class="dlg-foot"><span class="spacer"></span><button type="button" class="btn" data-act="del-cancel" autofocus>Keep event</button>
+      <button type="button" class="btn btn-danger-solid" data-act="del-confirm">Delete event and everything listed</button></div>`;
+  c.showModal();
+}
+async function deleteEventNow(id) {
+  const ev = eventById(id); if (!ev || !canDeleteEvent()) return cancelDeletion();
+  const d = eventDeletionItems(ev), btn = $('#confirm [data-act="del-confirm"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  if (LIVE) {
+    const {error} = await sb.rpc('delete_event', {p_event:id});
+    cancelDeletion();
+    if (error) return toast('Couldn’t delete it: ' + error.message, '', true);
+    await reloadLive();
+  } else {
+    recordChange('event', ev.id, 'deleted', ev.name);
+    state.events = state.events.filter(x => x.id !== ev.id);
+    state.designs = state.designs.filter(x => x.event !== ev.id);
+    state.budget.expenses = state.budget.expenses.filter(x => x.event !== ev.id);
+    state.budget.reimbursements = state.budget.reimbursements.filter(x => x.event !== ev.id);
+    delete state.budget.allocations[ev.id];
+    cancelDeletion(); save();
+  }
+  closeDialog(); render();
+  const gone = [d.requirements && `${d.requirements} checklist item${d.requirements === 1 ? '' : 's'}`, d.designs.length && `${d.designs.length} design request${d.designs.length === 1 ? '' : 's'}`,
+    d.expenses.length + d.reimbursements.length && `${d.expenses.length + d.reimbursements.length} budget record${d.expenses.length + d.reimbursements.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  toast(`Deleted ${d.name}`, gone);
 }
 
 /* ================= toasts ================= */
@@ -557,7 +616,7 @@ function handleLaunchParams() {
 }
 
 /* ================= navigation & render ================= */
-const VIEWS = {overview:vOverview, calendar:vCalendar, notes:vNotes, programmes:vProgrammes, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
+const VIEWS = {overview:vOverview, calendar:vCalendar, notes:vNotes, schedules:vSchedules, programmes:vProgrammes, meetings:vMeetings, events:vEvents, ideas:vIdeas, deadlines:vDeadlines, startups:vStartups, budget:vBudget, design:vDesign, members:vMembers, kb:vKB, admin:vAdmin};
 function go(v) {
   if (!access(v)) { toast(`${roleLabel(state.role)} doesn’t include ${sectionLabel(v)}`, '', true); return; }
   view = v; closeDialog(); render(); window.scrollTo(0, 0);
@@ -645,7 +704,7 @@ const ACT = {
   'st-card': el => { const v = el.dataset.v; Object.assign(filters.startups, {q:'', sector:'all', att: v === 'any' || v === 'never' ? v : 'all', missing: v === 'missing'}); render(); },
   'st-clear': () => { Object.assign(filters.startups, {q:'', sector:'all', att:'all', missing:false}); render(); },
   'new-meeting': () => openMeeting(null), 'open-meeting': el => openMeeting(el.dataset.id), 'del-meeting': el => requestDeletion('meeting', el.dataset.id),
-  'new-event': () => openEvent(null), 'open-event': el => openEvent(el.dataset.id),
+  'new-event': () => openEvent(null), 'open-event': el => openEvent(el.dataset.id), 'del-event': el => openEventDeletion(el.dataset.id),
   'new-idea': () => openIdea(null), 'open-idea': el => openIdea(el.dataset.id), 'del-idea': el => requestDeletion('idea', el.dataset.id),
   'new-task': () => openTask(),
   'new-design': () => openDesign(null), 'open-design': el => openDesign(el.dataset.id),
@@ -673,6 +732,7 @@ const ACT = {
   'idea-comment-del': el => requestDeletion('comment', el.dataset.id),
   ...NOTE_ACTS,
   ...VH_ACTS,
+  ...SCH_ACTS,
   'cal-month': el => { const d = parseD(filters.cal.cursor || calMonthStart(today())); d.setMonth(d.getMonth() + (+el.dataset.v)); filters.cal.cursor = ymd(d);
     filters.cal.sel = filters.cal.cursor.slice(0, 7) === today().slice(0, 7) ? today() : filters.cal.cursor; render(); },
   'cal-today': () => { filters.cal.sel = today(); filters.cal.cursor = calMonthStart(today()); render(); },
@@ -728,6 +788,7 @@ document.addEventListener('keydown', e => {
 
 const CHANGE = {
   ...VH_CHANGE,
+  ...SCH_CHANGE,
   // Admin → Permissions grid: edits stay in a draft until "Save permissions"
   perm: el => { if (!isAdmin()) return; permDraft ||= JSON.parse(JSON.stringify(sectionAccess()));
     const list = permDraft[el.dataset.s][el.dataset.k], id = el.dataset.id;
@@ -780,6 +841,7 @@ document.addEventListener('input', e => {
 /* ================= form submission ================= */
 const FORMS = {
   ...VH_FORMS,
+  ...SCH_FORMS,
   meeting(f, fd) {
     if (!ea()) { toast('Only the Executive Assistant can schedule meetings', '', true); return closeDialog(); }
     const id = f.dataset.id, prev = id ? state.meetings.find(x => x.id === id) : null, err = $('#merr');

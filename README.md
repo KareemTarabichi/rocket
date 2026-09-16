@@ -26,6 +26,7 @@ js/admin.js                Admin section (members, roles, teams, logins)
 js/live.js                 Supabase sign-in, loading, and saving changes
 js/app.js                  dialogs, forms, deletion, event handling
 js/venture.js              Programmes → The Venture Hour (mentors, slots, sign-ups, surveys)
+js/schedules.js            Schedules (class timetables, team compare, common free time)
 js/demo-data.js            startups for the demo
 survey.html                public post-meeting survey page (opened from each student's private link)
 integrations/venture-hour-form.gs         Apps Script for the Venture Hour Google Form
@@ -174,6 +175,21 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
    `supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…`
    `supabase functions deploy google-calendar --use-api --no-verify-jwt`
 6. Sign in to Rocket as the Executive Assistant → **Meetings → Connect Google Calendar** → pick the club Google account.
+
+## Schedules
+
+Everyone's class timetable, so the club can see when people are actually free. On for every role by default.
+
+- **My schedule**: add your classes — name, day, start and end time, optional room, and the semester dates. They repeat weekly and stop counting once the semester end passes. Rocket warns you if a new class overlaps one of your own.
+- **Team schedules**: filter by team or tick several people to compare timetables side by side, each in their own colour. You can only edit your own entries; the database enforces that. The **Executive Assistant** can also add and fix a timetable for someone who hasn't entered one.
+- **Common free time**: pick people and see the windows each weekday when none of them has class (8 AM–8 PM, minimum gap of your choice). Back-to-back classes don't create a gap. Anyone with no timetable is listed as "schedule not provided — availability unknown" and is never counted as free.
+- All times are plain **Gulf Standard Time**, the same way meetings are stored. Schedules never block or change a meeting — they're for planning only, and only the Executive Assistant still schedules meetings.
+
+Run `supabase/migrations/20260919000000_schedules_and_event_deletion.sql` once to switch this on.
+
+## Deleting an event
+
+The Executive Assistant or an admin can delete an event from its dialog. It takes everything filed against it: the checklist, design requests, expenses, reimbursements and the budget allocation. The confirmation lists each design request, expense and reimbursement by name and amount first, so nothing disappears unseen. The change history keeps a record of the deletion.
 
 ## Programmes → The Venture Hour
 

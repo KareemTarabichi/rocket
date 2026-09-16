@@ -32,6 +32,7 @@ const roleSelect = id => `<select class="input" id="${id}" data-change="role" ar
 /* ================= shell ================= */
 const TABS = ['overview', 'calendar', 'events', 'deadlines'];
 const FAB = {notes:() => !noteUI.open && ['note-new','New note'], calendar:() => ['new-event','New event'], meetings:() => ea() && ['new-meeting','Schedule'], events:() => ['new-event','New event'], ideas:() => ['new-idea','Submit idea'], deadlines:() => ['new-task','Follow-up'],
+  schedules:() => filters.sched.view === 'mine' && ['sch-new','Add a class'],
   programmes:() => vh.prog === 'venture' && vhReady() && (vh.tab === 'mentors' ? ['vh-new-mentor','Add mentor'] : ['week', 'signups'].includes(vh.tab) && ['vh-add-signup','Add sign-up']),
   startups:() => ['new-startup','Add startup'], design:() => ['new-design','New request'], budget:() => ['new-expense','Add expense']};
 function renderShell() {
