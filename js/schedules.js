@@ -307,7 +307,7 @@ function schedSeed(members) {
   add('vp', [['MKT 301 Marketing', 2, '14:00', '15:15', 'SBA 210'], ['MKT 301 Marketing', 4, '14:00', '15:15', 'SBA 210'], ['ENG 207 Writing', 1, '15:30', '16:45', 'CAS 019']]);
   add('treasurer', [['ACC 310 Audit', 1, '09:30', '10:45', 'SBA 207'], ['ECO 202 Microeconomics', 3, '12:30', '13:45', 'SBA 110'], ['ACC 310 Audit', 3, '09:30', '10:45', 'SBA 207']]);
   add('tech', [['CMP 305 Databases', 2, '11:00', '12:15', 'ENG 214'], ['CMP 305 Lab', 4, '16:00', '18:00', 'ENG Lab 2'], ['CMP 320 Networks', 1, '12:30', '13:45', 'ENG 210']]);
-  add('innovation', [['BUS 250 Entrepreneurship', 3, '14:00', '16:45', 'SBA 115'], ['PSY 101 Psychology', 5, '09:30', '10:45', 'CAS 210']]);
+  add('member', [['BUS 250 Entrepreneurship', 3, '14:00', '16:45', 'SBA 115'], ['PSY 101 Psychology', 5, '09:30', '10:45', 'CAS 210']]);
   add('design', [['DES 240 Typography', 2, '09:00', '11:45', 'ARC 105'], ['ARC 210 Studio', 4, '09:00', '12:45', 'ARC Studio']]);
   return rows;   // Advisor, PR, Media, Startup Coordinator have none — "schedule not provided"
 }

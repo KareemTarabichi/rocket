@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.20-2';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.21-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -61,27 +61,31 @@ const mq = window.matchMedia('(max-width: 760px)');
 const isM = () => mq.matches;
 
 /* ================= roles, sections, teams ================= */
+// Club roles. The ids are internal and never shown — renaming a role only changes its label here,
+// so every record that points at a role keeps working.
 const ROLES = [
   {id:'president', label:'President'}, {id:'vp', label:'Vice President'}, {id:'advisor', label:'Advisor'}, {id:'ea', label:'Executive Assistant'},
-  {id:'treasurer', label:'Treasurer'}, {id:'startup', label:'Startup Coordinator'}, {id:'pr', label:'PR'}, {id:'tech', label:'Tech'},
-  {id:'media', label:'Media'}, {id:'design', label:'Graphic Design'}, {id:'innovation', label:'Innovation'},
+  {id:'treasurer', label:'Treasurer'}, {id:'startup', label:'Startups Lead'}, {id:'pr', label:'PR Lead'}, {id:'tech', label:'Tech Lead'},
+  {id:'media', label:'Media Lead'}, {id:'design', label:'Graphics Lead'},
   {id:'member', label:'Team Member'}];   // a general member of any team: the shared sections, nothing role-specific
 const roleLabel = r => ROLES.find(x => x.id === r)?.label || r;
 const OVERSIGHT = ['president', 'vp', 'advisor', 'ea'];
 const BASE_SECTIONS = ['overview', 'calendar', 'meetings', 'events', 'ideas', 'deadlines', 'notes', 'kb', 'schedules'];
 const OVERSIGHT_SECTIONS = ['startups', 'budget', 'design', 'members', 'programmes'];
-const EXTRA_SECTIONS = {treasurer:['budget'], startup:['startups'], pr:['design'], innovation:['programmes']};
+const EXTRA_SECTIONS = {treasurer:['budget'], startup:['startups'], pr:['design']};
 const SECTIONS = [
   ['overview','Overview','home'], ['calendar','Calendar','grid'], ['meetings','Meetings','clock'], ['events','Events','star'], ['ideas','Ideas','bulb'], ['deadlines','Deadlines','flag'], ['notes','Notes','note'], ['schedules','Schedules','sched'], ['programmes','Programmes','spark'],
   ['startups','Startup Directory','rocket'], ['budget','Budget','coins'], ['design','Design','image'], ['members','Members & teams','team'], ['kb','Knowledge Base','book'], ['admin','Admin','shield']];
 const sectionLabel = s => SECTIONS.find(x => x[0] === s)?.[1] || s;
+// Teams — one per WhatsApp group. Ids are internal (they predate the group names), so renaming a team
+// is just a label change and every member, event, idea and meeting stays attached to the right one.
 const TEAMS = [
   {id:'leadership', name:'Leadership', wa:'chat.whatsapp.com/LeadRocket', desc:'President, Vice President, Advisor and Executive Assistant.'},
-  {id:'finance', name:'Finance', wa:'chat.whatsapp.com/FinRocket', desc:'Budget, expenses and reimbursements.'},
+  {id:'creative', name:'Design', wa:'chat.whatsapp.com/DesignRocket', desc:'Posters, signage, social templates and the club’s look.'},
+  {id:'innovation', name:'Socials', wa:'chat.whatsapp.com/SocialsRocket', desc:'Social media, content and community.'},
   {id:'startups', name:'Startups', wa:'chat.whatsapp.com/StartRocket', desc:'Startup relationships and the directory.'},
-  {id:'creative', name:'Creative', wa:'chat.whatsapp.com/CreateRocket', desc:'PR, media and graphic design.'},
   {id:'tech', name:'Tech', wa:'chat.whatsapp.com/TechRocket', desc:'Forms, livestreams and club tools.'},
-  {id:'innovation', name:'Innovation', wa:'chat.whatsapp.com/InnoRocket', desc:'New programmes and the ideas pipeline.'}];
+  {id:'finance', name:'PR & Vendors', wa:'chat.whatsapp.com/PRVendors', desc:'Sponsors, vendors, budget and reimbursements.'}];
 const teamName = id => TEAMS.find(t => t.id === id)?.name || '—';
 const HUES = ['#4DD9E8','#F5B942','#B7A6E6','#F5F4F7','#4ADE80','#E8672E','#F5626B','#7FE3EE','#F0946A','#F8CF7A','#9BE8B4'];
 const IDEA_STAGES = ['submitted','review','approved','progress','completed'];
@@ -106,7 +110,7 @@ function seed() {
     M('m8','Zaid Nasser','tech','tech','g00104127@aus.edu','Looks after forms, the livestream setup and club tools.'),
     M('m9','Mariam Qasim','media','creative','g00105560@aus.edu','Photo and video coverage, reels and recaps.'),
     M('m10','Sara Iqbal','design','creative','g00098215@aus.edu','Posters, signage and social templates.'),
-    M('m11','Ali Rahman','innovation','innovation','g00102289@aus.edu','Runs new programmes and shepherds ideas through the pipeline.'),
+    M('m11','Ali Rahman','member','innovation','g00102289@aus.edu','Runs new programmes and shepherds ideas through the pipeline.'),
     M('m12','Rana Said','media','creative','g00107713@aus.edu','Event photography.'),
     M('m13','Salem Darwish','member','innovation','g00108842@aus.edu','Helps out across programmes and events.')];
   // platform-admin demo data: Zaid (Tech) is the admin; Rana was invited and hasn't signed in yet

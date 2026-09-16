@@ -178,9 +178,13 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
 
 ## Club roles
 
-President, Vice President, Advisor, Executive Assistant, Treasurer, Startup Coordinator, PR, Tech, Media, Graphic Design, Innovation, and **Team Member** — a general member of any team, and the default for new invites. A Team Member gets the shared sections (Overview, Calendar, Meetings, Events, Ideas, Deadlines, Notes, Schedules, Knowledge Base) and none of the role-specific ones until an admin ticks more in Admin → Permissions. Teams are unchanged: Leadership, Finance, Startups, Creative, Tech, Innovation.
+**Roles:** President, Vice President, Advisor, Executive Assistant, Treasurer, Startups Lead, PR Lead, Tech Lead, Media Lead, Graphics Lead, and **Team Member** — a general member of any team, and the default for new accounts. A Team Member gets the shared sections (Overview, Calendar, Meetings, Events, Ideas, Deadlines, Notes, Schedules, Knowledge Base) and none of the role-specific ones until an admin ticks more in Admin → Permissions.
 
-Adding the role to the live database needs `supabase/migrations/20260920000000_team_member_role.sql`, run on its own (Postgres won't add and use an enum value in one transaction), plus a redeploy of the admin-users function so invites accept it.
+**Teams**, one per WhatsApp group: Leadership, Design, Socials, Startups, Tech, PR & Vendors.
+
+Role and team **ids are internal and never shown**, so renaming either is a label change in `js/core.js` and every existing record stays attached to the right thing. The ids predate the names: `creative` = Design, `innovation` = Socials, `finance` = PR & Vendors.
+
+Two migrations go with this: `20260920000000_team_member_role.sql` adds the Team Member role (run it on its own — Postgres won't add and use an enum value in one transaction), and `20260921000000_role_names.sql` retires the old Innovation role, makes Team Member the default for new accounts, and leaves Programmes to leadership. Redeploy the admin-users function too, so invites accept the role list.
 
 ## Schedules
 
