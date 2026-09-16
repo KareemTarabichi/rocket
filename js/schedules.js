@@ -194,15 +194,36 @@ function openClass(id) {
       ${ea() ? field('Whose timetable', `<select class="input" id="f-member" name="member">${state.members.filter(m => m.active !== false).map(m => opt(m.id, m.id === me().id ? `${m.name} (you)` : m.name, v.member)).join('')}</select>`, 'f-member')
         : `<input type="hidden" name="member" value="${esc(v.member)}">`}
       ${field('Class', inp('title', v.title, 'required placeholder="MKT 301 Marketing" autocomplete="off"'), 'f-title')}
-      <div class="grid2">${field('Day', `<select class="input" id="f-day" name="day">${SCH_DAYS.map(([d, , long]) => opt(String(d), long, String(v.day_of_week))).join('')}</select>`, 'f-day')}
-        ${field('Location <span class="faint">— optional</span>', inp('location', v.location, 'placeholder="ARC 101"'), 'f-location')}</div>
+      ${id ? `<div class="grid2">${field('Day', `<select class="input" id="f-day" name="day">${SCH_DAYS.map(([d, , long]) => opt(String(d), long, String(v.day_of_week))).join('')}</select>`, 'f-day')}
+        ${field('Location <span class="faint">— optional</span>', inp('location', v.location, 'placeholder="ARC 101"'), 'f-location')}</div>`
+      : `<div class="field"><span class="lbl">Days <span class="faint">— tick every day this class runs</span></span>
+          <div class="vh-choice sch-daychoice">${SCH_DAYS.map(([d, short, long]) => `<label><input type="checkbox" name="days" value="${d}" ${d === v.day_of_week ? 'checked' : ''}><span title="${long}">${short}</span></label>`).join('')}</div></div>
+        ${field('Location <span class="faint">— optional</span>', inp('location', v.location, 'placeholder="ARC 101"'), 'f-location')}`}
       <div class="grid2">${field('Starts', `<input class="input" id="f-start" name="start" type="time" value="${t(v.start_time)}" required>`, 'f-start')}
         ${field('Ends', `<input class="input" id="f-end" name="end" type="time" value="${t(v.end_time)}" required>`, 'f-end')}</div>
       <div class="grid2">${field('Semester starts <span class="faint">— optional</span>', `<input class="input" id="f-ts" name="term_start" type="date" value="${esc(v.term_start || '')}">`, 'f-ts')}
         ${field('Semester ends <span class="faint">— optional</span>', `<input class="input" id="f-te" name="term_end" type="date" value="${esc(v.term_end || '')}">`, 'f-te')}</div>
+      ${id ? `<div class="field sect"><span class="lbl">Copy to other days <span class="faint">— same time, room and semester</span></span>
+        <div class="vh-choice sch-daychoice">${SCH_DAYS.filter(([d]) => d !== v.day_of_week).map(([d, short, long]) => `<label><input type="checkbox" name="copy" value="${d}"><span title="${long}">${short}</span></label>`).join('')}</div>
+        <span class="muted-note">Ticked days are added as their own entries when you save, so you can change them separately later.</span></div>` : ''}
       <span class="muted-note">Leave the semester dates empty to keep the class until you remove it. Once the end date passes, it stops showing as busy.</span>
       <span class="err" id="scherr" role="alert"></span>
     </div>${foot(`<button class="btn btn-primary">${id ? 'Save' : 'Add class'}</button>`, id ? `<button type="button" class="btn btn-del" data-act="sch-del" data-id="${esc(id)}">${ic('trash')}Delete</button>` : '')}</form>`, 'narrow');
+}
+
+const newSchedId = () => (crypto.randomUUID ? crypto.randomUUID() : uid('cl'));
+// Copies a class onto other days — same time, room and semester. A day that already has the same
+// class at the same time is left alone, so copying twice never doubles anything up.
+function copyClass(rec, days) {
+  const added = [], skipped = [];
+  [...new Set(days)].filter(d => d >= 1 && d <= 7 && d !== rec.day_of_week).sort().forEach(d => {
+    const same = schedules().some(x => x.member === rec.member && x.day_of_week === d && x.title === rec.title
+      && String(x.start_time).slice(0, 5) === rec.start_time && String(x.end_time).slice(0, 5) === rec.end_time);
+    if (same) return skipped.push(d);
+    state.schedules.push({...rec, id:newSchedId(), day_of_week:d, created_at:new Date().toISOString(), updated_at:new Date().toISOString()});
+    added.push(d);
+  });
+  return {added, skipped};
 }
 
 const SCH_ACTS = {
@@ -225,18 +246,26 @@ const SCH_FORMS = {
   sch(f, fd) {
     const err = $('#scherr'), id = f.dataset.id, prev = id ? schOf(id) : null;
     const owner = ea() ? String(fd.get('member')) : me().id;
-    const rec = {id:id || (crypto.randomUUID ? crypto.randomUUID() : uid('cl')), member:owner, title:String(fd.get('title')).trim(), day_of_week:+fd.get('day'),
+    const days = id ? [+fd.get('day')] : fd.getAll('days').map(Number);
+    const rec = {id:id || newSchedId(), member:owner, title:String(fd.get('title')).trim(), day_of_week:days[0],
       start_time:String(fd.get('start')), end_time:String(fd.get('end')), location:String(fd.get('location') || '').trim(),
       term_start:String(fd.get('term_start') || '') || null, term_end:String(fd.get('term_end') || '') || null,
       created_by:prev?.created_by || me().id, created_at:prev?.created_at || new Date().toISOString(), updated_at:new Date().toISOString()};
     if (prev && !canEditSched(prev)) { closeDialog(); return toast('You can only change your own classes', '', true); }
     if (!rec.title) return err.textContent = 'Add the class name.';
+    if (!days.length) return err.textContent = 'Pick at least one day.';
     if (!rec.start_time || !rec.end_time) return err.textContent = 'Add the start and end times.';
     if (mins(rec.end_time) <= mins(rec.start_time)) return err.textContent = 'The class has to end after it starts.';
     if (rec.term_start && rec.term_end && rec.term_end < rec.term_start) return err.textContent = 'The semester has to end after it starts.';
     upsert(state.schedules, rec);
+    // the other days it runs on (when adding), or the days you copied it to (when editing)
+    const copyTo = id ? fd.getAll('copy').map(Number) : days.slice(1);
+    const {added, skipped} = copyClass(rec, copyTo);
+    const where = [rec.day_of_week, ...added].sort().map(d => SCH_DAYS.find(x => x[0] === d)[1]).join(', ');
     const clash = schedules().find(x => x.id !== rec.id && x.member === rec.member && x.day_of_week === rec.day_of_week && overlaps(x, rec));
-    finish(id ? `Saved ${rec.title}` : `Added ${rec.title}`, `${dayName(rec.day_of_week)} · ${schTime(rec)}${owner === me().id ? '' : ` · ${member(owner)?.name.split(' ')[0]}’s timetable`}`);
+    finish(id ? `Saved ${rec.title}` : `Added ${rec.title}`,
+      `${where} · ${schTime(rec)}${owner === me().id ? '' : ` · ${member(owner)?.name.split(' ')[0]}’s timetable`}`);
+    if (skipped.length) toast(`Already on ${skipped.map(d => SCH_DAYS.find(x => x[0] === d)[1]).join(', ')}`, 'those days were left as they are');
     if (clash) toast(`Heads up: it overlaps ${clash.title}`, `${dayName(clash.day_of_week)} · ${schTime(clash)}`, true);
   },
 };

@@ -1222,3 +1222,4 @@ dialog.dlg.search-pop[open]{display:flex}
   .sch-free-day{grid-template-columns:1fr;gap:8px}
   .sch-bar{gap:10px}
 }
+.sch-daychoice span{height:32px;padding:0 13px;font-family:var(--f-mono);font-size:12.5px}

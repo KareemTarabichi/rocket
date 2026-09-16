@@ -180,7 +180,8 @@ Once connected, every meeting the Executive Assistant schedules becomes an event
 
 Everyone's class timetable, so the club can see when people are actually free. On for every role by default.
 
-- **My schedule**: add your classes — name, day, start and end time, optional room, and the semester dates. They repeat weekly and stop counting once the semester end passes. Rocket warns you if a new class overlaps one of your own.
+- **My schedule**: add your classes — name, day(s), start and end time, optional room, and the semester dates. They repeat weekly and stop counting once the semester end passes. Rocket warns you if a new class overlaps one of your own.
+- **Same class on several days**: tick every day it runs when adding it, and Rocket creates one entry per day. To copy an existing one, open it and tick the days under **Copy to other days** — same time, room and semester. Each copy is its own entry, so you can change one day later without touching the rest, and copying a day that already has that class changes nothing.
 - **Team schedules**: filter by team or tick several people to compare timetables side by side, each in their own colour. You can only edit your own entries; the database enforces that. The **Executive Assistant** can also add and fix a timetable for someone who hasn't entered one.
 - **Common free time**: pick people and see the windows each weekday when none of them has class (8 AM–8 PM, minimum gap of your choice). Back-to-back classes don't create a gap. Anyone with no timetable is listed as "schedule not provided — availability unknown" and is never counted as free.
 - All times are plain **Gulf Standard Time**, the same way meetings are stored. Schedules never block or change a meeting — they're for planning only, and only the Executive Assistant still schedules meetings.
