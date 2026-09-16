@@ -244,7 +244,7 @@ function renderStartupForm() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">${approver ? `<button type="button" class="btn sm btn-danger-solid" data-act="startup-approve" data-id="${v.id}">Approve & delete</button><button type="button" class="btn sm" data-act="startup-keep" data-id="${v.id}">Keep startup</button>`
         : del.by === me().id ? `<button type="button" class="btn sm" data-act="startup-keep" data-id="${v.id}">Cancel my request</button><span class="faint" style="font-size:12.5px;align-self:center">Waiting for an admin or the President</span>` : '<span class="faint" style="font-size:12.5px">Waiting for an admin or the President to decide.</span>'}</div></div>` : '';
   const delBtn = v._new || del ? '' : `<button type="button" class="btn btn-del" data-act="startup-delete" data-id="${v.id}">${ic('trash')}${approver ? 'Delete startup' : 'Request deletion'}</button>`;
-  openDialog(`<form data-form="startup">${dHead(v._new ? 'Add startup' : v.name || 'Startup', v._new ? '' : (missingContact(v) ? '<span class="review">Missing contact details</span>' : 'Contact details complete'))}
+  openDialog(`<form data-form="startup">${dHead(v._new ? 'Add startup' : v.name || 'Startup', v._new ? '' : (missingContact(v) ? '<span class="review">No email or phone number</span>' : 'Has contact details'))}
     <div class="dlg-body">${delBanner}
       <div class="grid2">${field('Company', `<input class="input" id="f-sname" data-d="name" value="${esc(v.name)}" required>`, 'f-sname')}${field('Sector', `<input class="input" id="f-sector" data-d="sector" value="${esc(v.sector)}">`, 'f-sector')}</div>
       <div class="sect"><span class="eyebrow">Contacts · exactly one primary</span>
@@ -950,7 +950,7 @@ const FORMS = {
     const rec = {...v, name:v.name.trim()}; delete rec._new;
     const prevS = state.startups.find(x => x.id === rec.id);
     recordChange('startup', rec.id, prevS ? 'updated' : 'created', rec.name, prevS ? diffFields(prevS, rec, ['name', 'sector', 'notes', 'attendance', 'contacts']) : {});
-    upsert(state.startups, rec); finish(v._new ? 'Startup added' : 'Startup saved', missingContact(rec) ? 'contact details still missing' : '');
+    upsert(state.startups, rec); finish(v._new ? 'Startup added' : 'Startup saved', missingContact(rec) ? 'still no email or phone number' : '');
   },
   alloc(f, fd) {
     const {over} = allocSum(); if (over) return toast('Allocations add up to more than the overall budget', '', true);

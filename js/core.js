@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.21-1';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.21-2';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -393,7 +393,9 @@ function completeItem(key, done) {
 }
 
 /* ================= startups ================= */
-const missingContact = s => !s.contacts.length || !s.contacts.some(c => c.primary) || s.contacts.some(c => !c.name.trim() || !c.email.trim() || !c.phone.trim());
+// One way to reach them is enough: a startup is only “missing contact details” when no contact has
+// either an email or a phone number.
+const missingContact = s => !s.contacts.some(c => (c.email || '').trim() || (c.phone || '').trim());
 const primaryContact = s => s.contacts.find(c => c.primary) || s.contacts[0];
 function filteredStartups() {
   const f = filters.startups, q = f.q.trim().toLowerCase();

@@ -2,7 +2,7 @@
 /* ================= startup directory ================= */
 const ratingCell = r => r == null ? '<span class="faint">—</span>' : `<span class="rating ${r >= 8 ? 'hi' : r < 6 ? 'lo' : ''}"><span class="num">${r}</span><span class="bar"><i style="width:${r * 10}%"></i></span></span>`;
 const attTags = s => s.attendance.length ? s.attendance.map(a => `<span class="tag rise">${esc(a)}</span>`).join(' ') : '<span class="faint">Never</span>';
-const contactFlag = s => s.deletion ? '<span class="due over">Deletion pending</span>' : missingContact(s) ? '<span class="due soon">Missing details</span>' : '<span class="due done">Complete</span>';
+const contactFlag = s => s.deletion ? '<span class="due over">Deletion pending</span>' : missingContact(s) ? '<span class="due soon">No contact</span>' : '<span class="due done">Reachable</span>';
 function startupResults() {
   const list = filteredStartups(), f = filters.startups;
   if (!list.length) return '<div class="panel empty">No startups match. Clear the filters or search for something else.</div>';
@@ -27,13 +27,13 @@ function vStartups() {
   const hasF = f.q || f.sector !== 'all' || f.att !== 'all' || f.missing;
   return `<div class="page">
     ${heading('Startup Directory', 'Every startup the club has worked with, imported from the Launchpad Startups DB sheet. A startup counts once however many events it attended.', `<div class="seg desk-only">${[['table','Table'], ['cards','Cards']].map(([v, l]) => `<button data-act="st-view" data-v="${v}" aria-pressed="${f.view === v}">${l}</button>`).join('')}</div><button class="btn btn-primary" data-act="new-startup">${ic('plus')}Add startup</button>`)}
-    <div class="sum-cards">${card('all', all.length, 'Startups')}${card('any', any, 'Attended at least once')}${card('never', all.length - any, 'Never attended')}${card('missing', miss, 'Missing contact details')}</div>
+    <div class="sum-cards">${card('all', all.length, 'Startups')}${card('any', any, 'Attended at least once')}${card('never', all.length - any, 'Never attended')}${card('missing', miss, 'No email or phone')}</div>
     <label class="search" style="${isM() ? '' : 'display:none'}">${ic('search')}<input class="input" type="search" placeholder="Search company, sector, notes, contacts…" value="${esc(f.q)}" data-input="st-q" aria-label="Search startups"></label>
     <div class="${isM() ? 'scroller' : 'toolbar'}">
       ${isM() ? '' : `<label class="search">${ic('search')}<input class="input" type="search" placeholder="Search company, sector, notes, contacts…" value="${esc(f.q)}" data-input="st-q" aria-label="Search startups" style="width:280px"></label>`}
       <select class="input" data-change="st-sector" aria-label="Sector"><option value="all">All sectors</option>${sectors.map(([k, l]) => opt(k, l, f.sector)).join('')}</select>
       <select class="input" data-change="st-att" aria-label="Attendance">${opt('all', 'Any attendance', f.att)}${opt('any', 'Attended at least once', f.att)}${opt('never', 'Never attended', f.att)}${PAST_EVENTS.map(e => opt(e, 'Attended ' + e, f.att)).join('')}</select>
-      <label class="fchip" style="display:inline-flex;align-items:center;gap:6px;${f.missing ? 'background:var(--text-primary);color:var(--ink)' : ''}"><input type="checkbox" data-change="st-missing" ${f.missing ? 'checked' : ''} style="accent-color:var(--amber)">Missing contact details</label>
+      <label class="fchip" style="display:inline-flex;align-items:center;gap:6px;${f.missing ? 'background:var(--text-primary);color:var(--ink)' : ''}"><input type="checkbox" data-change="st-missing" ${f.missing ? 'checked' : ''} style="accent-color:var(--amber)">No email or phone</label>
       ${hasF ? '<button class="btn btn-ghost sm" data-act="st-clear">Clear filters</button>' : ''}
       ${isM() ? '' : `<span class="spacer"></span><span class="faint" id="st-count" style="font-size:13px">${filteredStartups().length} shown</span>`}
     </div>
