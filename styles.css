@@ -1235,3 +1235,7 @@ dialog.dlg.search-pop[open]{display:flex}
 .s-site svg{width:12px;height:12px;flex:none;opacity:.7}
 .s-site-cell{max-width:200px}
 .card-foot .s-site{margin-right:auto}
+.hl-row{display:grid;grid-template-columns:minmax(0,1fr) 220px 34px;gap:8px;align-items:center;margin-bottom:8px}
+.hl-preview{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:var(--r-sm);border:1px solid var(--border);background:linear-gradient(135deg,rgba(91,63,160,.25),rgba(232,103,46,.12));margin-bottom:6px}
+.hl-preview .tagline{font:600 20px/1.25 var(--f-display);margin:0}
+@media (max-width:760px){.hl-row{grid-template-columns:minmax(0,1fr) 34px}.hl-row [data-hl-by]{grid-column:1;grid-row:2}}

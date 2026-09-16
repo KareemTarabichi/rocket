@@ -136,6 +136,7 @@ Later, if you connect your own email sender (Authentication → Emails → SMTP)
   - **Other links** (Instagram, forms, anything): shown to everyone under "Club links" on the Overview.
 - **Approve startup deletions**. Anyone with the directory can ask to delete a startup; only an admin or the President can approve (it then disappears for everyone) or keep it.
 
+- **Headlines** (Admin → Headlines): the rotating line at the top of the Overview. Add, edit, remove or restore the built-in lines; a quote gets its author in a separate box and shows underneath as “— Name”. Saved to the database (`20260923000000_headlines.sql`), so changes reach everyone without a deploy.
 - **Permissions** (Admin → Permissions): a grid of which club roles and teams can open each section — a member gets a section if their role **or** their team is ticked. Programmes, Startups, Budget, Design and Members & teams are enforced by the database (`20260917000000_section_permissions.sql`, `20260918000000_venture_hour.sql`); the other sections are hidden in the app. Overview is always on; Admin always follows the per-person admin switch. The same tab lists the fixed rules (who schedules meetings, who deletes ideas, etc.).
 
 Admin is a platform permission on top of a club role. It does **not** grant club powers: only the Executive Assistant can schedule, edit or cancel meetings, admin or not.

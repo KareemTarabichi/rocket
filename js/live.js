@@ -25,7 +25,8 @@ const COLLECTIONS = [
     deletion_requested_by:s.deletion?.by || null, deletion_requested_at:s.deletion?.at || null, deletion_reason:s.deletion?.reason || ''})},
   {key:'schedules', table:'class_schedules', get:() => state.schedules || [], to:r => ({id:r.id, member:r.member, title:r.title, day_of_week:r.day_of_week, start_time:r.start_time, end_time:r.end_time,
     location:r.location || '', term_start:r.term_start || null, term_end:r.term_end || null, created_by:r.created_by || null})},
-  {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || '', links:state.settings.links || {}, section_access:state.settings.sectionAccess || null})},
+  {key:'settings', table:'app_settings', single:true, to:() => ({id:1, design_drive_url:state.settings.designDriveUrl || '', links:state.settings.links || {}, section_access:state.settings.sectionAccess || null,
+    ...(state.settings.taglines !== undefined ? {taglines:state.settings.taglines} : {})})},   // only once the column exists
   {key:'kb', table:'kb_articles', get:() => state.kb, to:a => ({id:a.id, title:a.title, category:a.category, roles:a.roles, summary:a.summary || '', body:a.body, updated_by:a.updatedBy || null, updated_at:a.updatedAt})},
   {key:'expenses', table:'expenses', mode:'upsert-no-delete', get:() => state.budget.expenses, to:e => ({id:e.id, name:e.name, event_id:e.event || null, planned:+e.planned || 0, actual:+e.actual || 0, receipt:e.receipt || ''})},
   {key:'reimbursements', table:'reimbursements', mode:'upsert-no-delete', get:() => state.budget.reimbursements, to:r => ({id:r.id, name:r.name, member:r.member || null, event_id:r.event || null, amount:+r.amount || 0, status:r.status, receipt:r.receipt || ''})},
@@ -63,7 +64,7 @@ async function buildState(userId) {
     startups:s.map(x => ({id:x.id, name:x.name, sector:x.sector, website:x.website || '', notes:x.notes, attendance:x.attendance || [], contacts:x.contacts || [], rating:x.rating == null ? null : +x.rating,
       deletion:x.deletion_requested_at ? {by:x.deletion_requested_by, at:x.deletion_requested_at, reason:x.deletion_reason || ''} : null})),
     kb:kb.map(x => ({id:x.id, title:x.title, category:x.category, roles:x.roles || [], summary:x.summary, body:x.body, updatedBy:x.updated_by, updatedAt:x.updated_at})),
-    settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}, sectionAccess:st?.section_access || null},
+    settings:{designDriveUrl:st?.design_drive_url || '', links:st?.links || {}, sectionAccess:st?.section_access || null, ...(st && 'taglines' in st ? {taglines:st.taglines} : {})},
     notes:(nt || []).map(normNote),
     schedules:await schedP,
     ideaComments:(ic || []).map(x => ({id:x.id, ideaId:x.idea_id, author:x.author, title:x.title, body:x.body, at:x.created_at})),

@@ -21,11 +21,12 @@ async function loadAdmin(force) {
 }
 
 let adminTab = 'members';
-const adminTabs = () => `<div class="tabs" role="tablist">${[['members', 'Members'], ['links', 'Links'], ['permissions', 'Permissions']].map(([v, l]) => `<button role="tab" data-act="admin-tab" data-v="${v}" aria-selected="${adminTab === v}">${l}</button>`).join('')}</div>`;
+const adminTabs = () => `<div class="tabs" role="tablist">${[['members', 'Members'], ['links', 'Links'], ['headlines', 'Headlines'], ['permissions', 'Permissions']].map(([v, l]) => `<button role="tab" data-act="admin-tab" data-v="${v}" aria-selected="${adminTab === v}">${l}</button>`).join('')}</div>`;
 function vAdmin() {
   if (!isAdmin()) return '<div class="page"><div class="panel empty">Only admins can open this section.</div></div>';
   if (adminTab === 'links') return vAdminLinks();
   if (adminTab === 'permissions') return vAdminPermissions();
+  if (adminTab === 'headlines') return vAdminHeadlines();
   if (!LIVE) loadAdmin();
   else if (!adminData.members && !adminData.loading && !adminData.error) loadAdmin();
   const list = adminData.members;
@@ -285,3 +286,26 @@ const PERM_RULES = [
   ['Notes', [['See a note', 'Its owner and anyone it’s shared with (or the whole club, if opened up)'], ['Change who a note is shared with', 'Its owner'], ['Delete a note', 'Its owner or an admin']]],
   ['People & settings', [['Edit responsibilities', 'Leadership'], ['Invite, remove, change roles, reset passwords', 'Admins'], ['Knowledge base, links, permissions', 'Admins']]],
 ];
+
+/* ---- Admin → Headlines: the rotating line at the top of the Overview ---- */
+const headlineRow = (h = {}) => `<div class="hl-row">
+  <input class="input" data-hl-t value="${esc(h.t || '')}" maxlength="160" placeholder="The line itself — e.g. “Stay hungry, stay foolish.”" aria-label="Headline">
+  <input class="input" data-hl-by value="${esc(h.by || '')}" maxlength="60" placeholder="Who said it — optional" aria-label="Attribution">
+  <button type="button" class="btn btn-ghost sm icon-btn" data-act="hl-del" aria-label="Remove headline">${ic('x')}</button></div>`;
+function vAdminHeadlines() {
+  const saved = state.settings.taglines, list = saved?.length ? saved : DEFAULT_TAGLINES;
+  return `<div class="page">
+    ${heading('Admin', 'The line at the top of everyone’s Overview. Rocket picks one at random and changes it every 12 seconds.')}${adminTabs()}
+    <form data-form="headlines" novalidate class="stackcol">
+      <section class="panel"><div class="panel-head"><h2>Headlines</h2><span class="faint" style="font-size:12.5px">${saved?.length ? `${saved.length} saved` : `Showing the ${DEFAULT_TAGLINES.length} built-in lines`}</span></div>
+        <div class="links-body">
+          <div class="hl-preview"><span class="eyebrow">Preview</span><div class="tagline" id="hl-preview">${taglineHtml()}</div></div>
+          <div id="hl-rows">${list.map(headlineRow).join('')}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="hl-add">${ic('plus')}Add a headline</button>
+            <button type="button" class="btn sm btn-ghost" data-act="hl-defaults">Restore the built-in lines</button></div>
+          <span class="muted-note">For a quote, type the quotation marks as part of the line and put the person in “Who said it”; it shows underneath as “— Name”. Keep lines under about 90 characters so they fit on a phone.</span>
+        </div></section>
+      <div class="links-save"><span class="err" id="hlerr" role="alert"></span><button class="btn btn-primary">Save headlines</button></div>
+    </form>
+  </div>`;
+}

@@ -75,7 +75,8 @@ function moreSheet() {
 
 /* ================= overview ================= */
 // The Overview headline: one of these, picked at random and rotated every few seconds.
-const TAGLINES = [
+// Admins edit the list in Admin → Headlines; these are the built-in defaults until they do.
+const DEFAULT_TAGLINES = [
   {t:'Welcome to Rocket. Everything Launchpad runs, in one place. Let’s build.'},
   {t:'Ignition sequence complete. Let’s get to work.'},
   {t:'You’re in. Time to launch something worth building.'},
@@ -91,12 +92,14 @@ const TAGLINES = [
   {t:'Every rocket needs a spark. Consider this yours.'},
   {t:'Some ideas just orbit. Others break gravity. Which one’s yours?'},
   {t:'Welcome to Rocket, where Launchpad’s ideas actually take off.'}];
-let taglineIdx = Math.floor(Math.random() * TAGLINES.length);
-const taglineHtml = () => { const q = TAGLINES[taglineIdx]; return `${esc(q.t)}${q.by ? `<span class="tagline-by">— ${esc(q.by)}</span>` : ''}`; };
+const taglines = () => (state?.settings?.taglines?.length ? state.settings.taglines : DEFAULT_TAGLINES);
+let taglineIdx = Math.floor(Math.random() * DEFAULT_TAGLINES.length);
+const taglineHtml = () => { const list = taglines(), q = list[taglineIdx % list.length]; return `${esc(q.t)}${q.by ? `<span class="tagline-by">— ${esc(q.by)}</span>` : ''}`; };
 function rotateTagline() {
   const el = $('#tagline');
   if (!el || document.visibilityState !== 'visible') return;
-  let next; do { next = Math.floor(Math.random() * TAGLINES.length); } while (next === taglineIdx && TAGLINES.length > 1);
+  const n = taglines().length;
+  let next; do { next = Math.floor(Math.random() * n); } while (next === taglineIdx % n && n > 1);
   el.classList.add('fade');
   setTimeout(() => { taglineIdx = next; el.innerHTML = taglineHtml(); el.classList.remove('fade'); }, 400);
 }

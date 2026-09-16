@@ -777,6 +777,9 @@ const ACT = {
   'perm-save': () => { if (!isAdmin() || !permDraft) return; state.settings.sectionAccess = permDraft; permDraft = null; save(); render(); toast('Permissions saved', 'members see them the next time Rocket refreshes'); },
   'perm-discard': () => { permDraft = null; render(); },
   'perm-defaults': () => { permDraft = defaultSectionAccess(); render(); toast('Defaults loaded', 'press Save permissions to apply'); },
+  'hl-add': () => { $('#hl-rows').insertAdjacentHTML('beforeend', headlineRow()); $('#hl-rows .hl-row:last-child [data-hl-t]').focus(); },
+  'hl-del': el => { el.closest('.hl-row').remove(); },
+  'hl-defaults': () => { $('#hl-rows').innerHTML = DEFAULT_TAGLINES.map(headlineRow).join(''); toast('Built-in lines loaded', 'press Save headlines to use them'); },
   'admin-tab': el => { adminTab = el.dataset.v; if (adminTab === 'links') adminData.calendar = null; render(); },
   'admin-links': () => { adminTab = 'links'; adminData.calendar = null; go('admin'); },
   'link-row-add': () => { $('#custom-links').insertAdjacentHTML('beforeend', customRow()); $('#custom-links .custom-row:last-child [data-cl]').focus(); },
@@ -863,6 +866,8 @@ function syncDraft(el) {
 document.addEventListener('input', e => {
   const el = e.target;
   if (vhInput(el)) return;
+  if (el.matches?.('[data-hl-t], [data-hl-by]')) { const r = el.closest('.hl-row'), t = r.querySelector('[data-hl-t]').value.trim(), by = r.querySelector('[data-hl-by]').value.trim(), p = $('#hl-preview');
+    if (p && t) p.innerHTML = `${esc(t)}${by ? `<span class="tagline-by">— ${esc(by)}</span>` : ''}`; return; }
   if (el.dataset.input === 'st-q') { filters.startups.q = el.value; $('#st-results').innerHTML = startupResults(); const c = $('#st-count'); if (c) c.textContent = filteredStartups().length + ' shown'; return; }
   if (el.dataset.input === 'search-q') { renderSearch(el.value); return; }
   if (el.dataset.input === 'kb-q') { filters.kb = el.value; $('#kb-results').innerHTML = kbResults(); return; }
@@ -1028,6 +1033,18 @@ const FORMS = {
     if (wa && !/^\+?[0-9 ()-]{7,24}$/.test(wa)) { $('#aerr').textContent = 'Use a phone number like +971 50 123 4567.'; return; }
     const m = member(p.id); if (m && (m.whatsapp || '') !== wa) { m.whatsapp = wa; if (t) t.whatsapp = wa; save(); }
     (LIVE ? syncChain : Promise.resolve()).then(() => runAdmin('update', p, `Saved ${p.name}`, t && t.role !== p.role ? `${roleLabel(t.role)} → ${roleLabel(p.role)}` : ''));
+  },
+  headlines(f) {
+    if (!isAdmin()) return;
+    const rows = [...f.querySelectorAll('.hl-row')].map(r => ({t:r.querySelector('[data-hl-t]').value.trim(), by:r.querySelector('[data-hl-by]').value.trim()}));
+    const list = rows.filter(r => r.t).map(r => r.by ? {t:r.t, by:r.by} : {t:r.t});
+    if (rows.some(r => !r.t && r.by)) { $('#hlerr').textContent = 'A line has a name but no headline. Add the text or remove it.'; return; }
+    if (!list.length) { $('#hlerr').textContent = 'Keep at least one headline, or restore the built-in lines.'; return; }
+    // saving exactly the defaults stores nothing, so future changes to the built-in list still reach you
+    const same = JSON.stringify(list) === JSON.stringify(DEFAULT_TAGLINES.map(h => h.by ? {t:h.t, by:h.by} : {t:h.t}));
+    state.settings.taglines = same ? null : list;
+    taglineIdx = Math.floor(Math.random() * list.length);
+    save(); render(); toast('Headlines saved', `${list.length} line${list.length === 1 ? '' : 's'} · everyone sees them on their next refresh`);
   },
   links(f, fd) {
     if (!isAdmin()) return;
