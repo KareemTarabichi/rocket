@@ -1,5 +1,5 @@
 /* Live mode runs against Supabase when config.js has a project URL and anon key; otherwise the app is a local demo. */
-const APP_VERSION = '2026.09.21-2';   // bump with every release (also the ?v= in index.html)
+const APP_VERSION = '2026.09.22-1';   // bump with every release (also the ?v= in index.html)
 const CFG = window.ROCKET_CONFIG || {};
 const LIVE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 const STARTUP_ROWS = window.STARTUP_ROWS || [];
@@ -138,9 +138,9 @@ function seed() {
       tasks:[R('Facilitator confirmed','m11',-3,true), R('Handouts printed','m10',8)]}];
 
   const tasks = [
-    {id:'t1', title:'Send Rise sponsor invoice', owner:'m5', due:D(2), done:false, related:'Rise'},
+    {id:'t1', title:'Send Rise sponsor invoice', owner:'m5', due:D(2), done:false, related:'Rise', createdBy:'m1'},
     {id:'t2', title:'Update onboarding deck for new members', owner:'m2', due:D(4), done:false, related:'Onboarding'},
-    {id:'t3', title:'Reply to Healthstay.io about a workshop', owner:'m6', due:D(-1), done:false, related:'Startup Directory'},
+    {id:'t3', title:'Reply to Healthstay.io about a workshop', owner:'m6', due:D(-1), done:false, related:'Startup Directory', createdBy:'m3'},
     {id:'t4', title:'Fix sign-up form validation', owner:'m8', due:T, done:false, related:'Rise'},
     {id:'t5', title:'Photo selects from Rise rehearsal', owner:'m9', due:D(3), done:false, related:'Rise'},
     {id:'t6', title:'Archive last term’s minutes', owner:'m4', due:D(-6), done:true, related:'Meetings'},
@@ -181,7 +181,7 @@ function seed() {
     const F = r.founders.length ? r.founders : (r.phones.length || r.emails.length ? [''] : []);
     const contacts = F.map((name, k) => ({id:uid('c'), name, email: F.length > 1 ? (r.emails[k] || '') : (r.emails[0] || ''), phone: F.length > 1 ? (r.phones[k] || '') : (r.phones[0] || ''), primary:k === 0}));
     const extra = F.length <= 1 ? [...r.emails.slice(1), ...r.phones.slice(1)] : [];
-    return {id:'s' + (i + 1), name:r.name, sector:r.sector, contacts, rating:r.rating,
+    return {id:'s' + (i + 1), name:r.name, sector:r.sector, contacts, rating:r.rating, website:r.website || '',
       notes:[r.desc, extra.length ? `Other contact details: ${extra.join(', ')}` : ''].filter(Boolean).join('\n\n'),
       attendance: r.attendance ? ['Rise'] : [], deletion:null};
   });
@@ -309,6 +309,7 @@ const commentsFor = ideaId => (state.ideaComments || []).filter(c => c.ideaId ==
 const canDeleteEvent = () => ea() || isAdmin();
 const canEvent = ev => !!ev && (oversight() || ev.createdBy === me().id || teamMembers(ev.team).includes(me().id));
 const canTask = item => !!item && (oversight() || item.owners.includes(me().id));
+const canEditTask = t => !!t && (oversight() || t.owner === me().id || t.createdBy === me().id);
 const canDesignStatus = d => access('design') || d.owner === me().id;
 // Deleting a startup needs an admin or the President; anyone with the directory can ask for it.
 const canApproveStartupDeletion = () => isAdmin() || state.role === 'president';
@@ -369,11 +370,11 @@ const relevantIdea = (i, id = me().id) => i.owner === id || i.assigned.includes(
 /* ================= deadlines (derived) ================= */
 function deadlineItems(all = false) {
   const items = [];
-  state.tasks.forEach(t => items.push({key:'task:' + t.id, src:'task', srcLabel:'Follow-up', id:t.id, title:t.title, related:t.related || 'Follow-up', owner:t.owner, owners:[t.owner], team:member(t.owner)?.team, due:t.due, done:t.done}));
+  state.tasks.forEach(t => items.push({key:'task:' + t.id, src:'task', srcLabel:'Follow-up', id:t.id, title:t.title, related:t.related || 'Follow-up', owner:t.owner, owners:[t.owner], createdBy:t.createdBy, team:member(t.owner)?.team, due:t.due, done:t.done}));
   state.events.forEach(e => e.tasks.forEach(r => items.push({key:`req:${e.id}:${r.id}`, src:'req', srcLabel:'Event', id:r.id, eventId:e.id, title:r.title, related:e.name, owner:r.owner, owners:[r.owner], team:e.team, due:r.due, done:r.done})));
   state.ideas.forEach(i => { if (i.next && i.due) items.push({key:'idea:' + i.id, src:'idea', srcLabel:'Idea', id:i.id, title:i.next, related:i.title, owner:i.owner, owners:[i.owner, ...i.assigned], team:i.team, due:i.due, done:i.stage === 'completed'}); });
   state.designs.forEach(d => { if (d.owner && d.due) items.push({key:'design:' + d.id, src:'design', srcLabel:'Design', id:d.id, title:d.title, related:d.event ? eventById(d.event)?.name || 'Event' : d.campaign || 'Campaign', owner:d.owner, owners:[d.owner], team:member(d.owner)?.team, due:d.due, done:d.status === 'completed'}); });
-  const list = all || oversight() ? items : items.filter(x => x.owners.includes(me().id));
+  const list = all || oversight() ? items : items.filter(x => x.owners.includes(me().id) || x.createdBy === me().id);
   return list.sort((a, b) => a.due.localeCompare(b.due));
 }
 const pending = () => deadlineItems().filter(x => !x.done);
@@ -400,7 +401,7 @@ const primaryContact = s => s.contacts.find(c => c.primary) || s.contacts[0];
 function filteredStartups() {
   const f = filters.startups, q = f.q.trim().toLowerCase();
   return state.startups.filter(s =>
-    (!q || [s.name, s.sector, s.notes, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ').toLowerCase().includes(q)) &&
+    (!q || [s.name, s.sector, s.notes, s.website, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ').toLowerCase().includes(q)) &&
     (f.sector === 'all' || (s.sector || '').toLowerCase() === f.sector) &&
     (f.att === 'all' || (f.att === 'any' ? s.attendance.length : f.att === 'never' ? !s.attendance.length : s.attendance.includes(f.att))) &&
     (!f.missing || missingContact(s))

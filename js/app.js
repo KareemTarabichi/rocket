@@ -193,13 +193,19 @@ function refreshIdeaThread(ideaId) {
 }
 
 /* ---------- follow-up task ---------- */
-function openTask() {
-  openDialog(`<form data-form="task" novalidate>${dHead('Add a follow-up', oversight() ? 'Assign it to anyone.' : 'Follow-ups you add are assigned to you.')}
+function openTask(id) {
+  const t = id ? state.tasks.find(x => x.id === id) : null;
+  if (id && !t) return;
+  if (t && !canEditTask(t)) { toast('Only its assignee, whoever assigned it, or leadership can change this', '', true); return; }
+  const v = t || {title:'', due:addDays(today(), 3), related:'', owner:me().id};
+  const from = t && t.createdBy && t.createdBy !== t.owner ? `Assigned by ${esc(member(t.createdBy)?.name || 'a former member')}` : '';
+  openDialog(`<form data-form="task" ${t ? `data-id="${esc(t.id)}"` : ''} novalidate>${dHead(t ? 'Follow-up' : 'Add a follow-up', t ? from : 'Assign it to yourself or to someone else. They’re told straight away.')}
     <div class="dlg-body">
-      ${field('What needs doing?', inp('title', '', 'required placeholder="e.g. Send thank-you notes to Rise speakers"'), 'f-title')}
-      <div class="grid2">${field('Due', inp('due', addDays(today(), 3), 'type="date" required'), 'f-due')}${field('Related to', inp('related', '', 'placeholder="Event, project or topic" list="rel-list"') + `<datalist id="rel-list">${state.events.map(e => `<option value="${esc(e.name)}">`).join('')}</datalist>`, 'f-related')}</div>
-      ${field('Owner', `<select class="input" id="f-owner" name="owner" ${oversight() ? '' : 'disabled'}>${memberOpts(me().id)}</select>`, 'f-owner')}
-    </div>${foot('<button class="btn btn-primary">Add follow-up</button>')}</form>`, 'narrow');
+      ${field('What needs doing?', inp('title', v.title, 'required placeholder="e.g. Send thank-you notes to Rise speakers"'), 'f-title')}
+      <div class="grid2">${field('Due', inp('due', v.due, 'type="date" required'), 'f-due')}${field('Related to', inp('related', v.related, 'placeholder="Event, project or topic" list="rel-list"') + `<datalist id="rel-list">${state.events.map(e => `<option value="${esc(e.name)}">`).join('')}</datalist>`, 'f-related')}</div>
+      ${field('Assignee', `<select class="input" id="f-owner" name="owner">${state.members.filter(m => m.active !== false).map(m => opt(m.id, `${m.name}${m.id === me().id ? ' (you)' : ''} · ${roleLabel(m.role)}`, v.owner)).join('')}</select>`, 'f-owner')}
+      <span class="muted-note">Changing the assignee moves it to their Deadlines and lets them know. ${t && t.done ? 'This one is already ticked off.' : ''}</span>
+    </div>${foot(`<button class="btn btn-primary">${t ? 'Save follow-up' : 'Add follow-up'}</button>`)}</form>`, 'narrow');
 }
 
 /* ---------- design ---------- */
@@ -247,6 +253,7 @@ function renderStartupForm() {
   openDialog(`<form data-form="startup">${dHead(v._new ? 'Add startup' : v.name || 'Startup', v._new ? '' : (missingContact(v) ? '<span class="review">No email or phone number</span>' : 'Has contact details'))}
     <div class="dlg-body">${delBanner}
       <div class="grid2">${field('Company', `<input class="input" id="f-sname" data-d="name" value="${esc(v.name)}" required>`, 'f-sname')}${field('Sector', `<input class="input" id="f-sector" data-d="sector" value="${esc(v.sector)}">`, 'f-sector')}</div>
+      ${field('Website <span class="faint">— optional</span>', `<input class="input" id="f-website" data-d="website" type="text" inputmode="url" autocomplete="url" value="${esc(v.website || '')}" placeholder="company.com">`, 'f-website')}
       <div class="sect"><span class="eyebrow">Contacts · exactly one primary</span>
         ${v.contacts.map(c => `<div class="contact-edit">
           ${field('Name', `<input class="input" data-ct="${c.id}" data-f="name" value="${esc(c.name)}">`)}${field('Email', `<input class="input" type="email" data-ct="${c.id}" data-f="email" value="${esc(c.email)}">`)}${field('Phone', `<input class="input" type="tel" data-ct="${c.id}" data-f="phone" value="${esc(c.phone)}">`)}
@@ -594,7 +601,7 @@ function searchIndex() {
   state.events.forEach(e => add('Event', 'open-event', e.id, e.name, `${fmtDate(e.date)} · ${e.location || 'TBC'}`, [e.description, ...e.tasks.map(t => t.title)].join(' ')));
   visibleMeetings().forEach(m => add('Meeting', 'open-meeting', m.id, m.title, `${fmtDate(m.date)} · ${fmtTime(m.start)} · ${m.location}`, m.agenda));
   deadlineItems().filter(x => x.src === 'task').forEach(x => add('Follow-up', 'go', x.id, x.title, `${x.related} · ${member(x.owner)?.name || ''} · ${x.done ? 'done' : relDue(x.due)}`, '', 'deadlines'));
-  if (access('startups')) state.startups.forEach(s => add('Startup', 'open-startup', s.id, s.name, s.sector || '', [s.notes, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ')));
+  if (access('startups')) state.startups.forEach(s => add('Startup', 'open-startup', s.id, s.name, s.sector || '', [s.notes, s.website, ...s.contacts.flatMap(c => [c.name, c.email, c.phone])].join(' ')));
   state.designs.filter(d => access('design') || d.owner === me().id).forEach(d => add('Design', 'open-design', d.id, d.title, `${DESIGN_LABEL[d.status]} · ${member(d.owner)?.name || ''}`, [d.brief, d.deliverables, d.campaign].join(' ')));
   state.members.filter(m => m.active !== false).forEach(m => add('Person', 'edit-member', m.id, m.name, `${roleLabel(m.role)} · ${teamName(m.team)}`, m.email));
   if (access('programmes') && vhReady()) V().mentors.forEach(m => add('Mentor', 'vh-edit-mentor', m.id, m.name, `${VH_TYPE[m.type]} · ${m.org_title || 'The Venture Hour'}${m.active ? '' : ' · inactive'}`, `${m.email} ${m.focus_area}`));
@@ -731,7 +738,7 @@ const ACT = {
   'new-meeting': () => openMeeting(null), 'open-meeting': el => openMeeting(el.dataset.id), 'del-meeting': el => requestDeletion('meeting', el.dataset.id),
   'new-event': () => openEvent(null), 'open-event': el => openEvent(el.dataset.id), 'del-event': el => openEventDeletion(el.dataset.id),
   'new-idea': () => openIdea(null), 'open-idea': el => openIdea(el.dataset.id), 'del-idea': el => requestDeletion('idea', el.dataset.id),
-  'new-task': () => openTask(),
+  'new-task': () => openTask(null), 'edit-task': el => openTask(el.dataset.id),
   'new-design': () => openDesign(null), 'open-design': el => openDesign(el.dataset.id),
   'new-startup': () => openStartup(null), 'open-startup': el => openStartup(el.dataset.id),
   'edit-alloc': () => openAlloc(), 'new-expense': () => { if (access('budget')) openExpense(null); }, 'edit-expense': el => openExpense(el.dataset.id), 'new-reimb': () => openReimb(null), 'edit-reimb': el => openReimb(el.dataset.id),
@@ -926,11 +933,18 @@ const FORMS = {
     if (added.length) afterSync(() => fnApi('push', 'idea', {id:rec.id, added}).catch(() => {}));
   },
   task(f, fd) {
-    const owner = oversight() ? fd.get('owner') : me().id, title = fd.get('title').trim(), due = fd.get('due');
+    const id = f.dataset.id, prev = id ? state.tasks.find(x => x.id === id) : null;
+    if (prev && !canEditTask(prev)) { closeDialog(); return toast('You can’t change this follow-up', '', true); }
+    const owner = String(fd.get('owner')), title = String(fd.get('title')).trim(), due = String(fd.get('due'));
     if (!title || !due) return toast('Add what needs doing and when', '', true);
-    const tid = uid('t'); state.tasks.push({id:tid, title, owner, due, done:false, related:fd.get('related').trim() || 'Follow-up'});
-    if (owner !== me().id) afterSync(() => fnApi('push', 'task', {id:tid}).catch(() => {}));
-    finish('Follow-up added', `${member(owner).name} · ${fmtDate(due)}`);
+    const rec = {...(prev || {}), id:id || uid('t'), title, owner, due, done:!!prev?.done, related:String(fd.get('related')).trim() || 'Follow-up', createdBy:prev?.createdBy || me().id};
+    upsert(state.tasks, rec);
+    const handedOver = owner !== me().id && (!prev || prev.owner !== owner);   // newly theirs: tell them
+    let nid = null;
+    if (handedOver) nid = notify('task', `New follow-up: ${title}`, `Due ${fmtDate(due)} · ${rec.related} · from ${me().name}`, [owner]);
+    finish(prev ? 'Follow-up saved' : 'Follow-up added',
+      `${member(owner)?.name || 'Unassigned'} · ${fmtDate(due)}${handedOver ? (LIVE ? ' · they’ve been notified' : ' · notified (simulated)') : ''}`);
+    if (handedOver) afterSync(async () => { await fnApi('push', 'task', {id:rec.id}).catch(() => {}); if (nid) await fnApi('push', 'notification', {id:nid}).catch(() => {}); });
   },
   design(f, fd) {
     if (!access('design')) return closeDialog();
@@ -946,10 +960,12 @@ const FORMS = {
     if (!access('startups')) return closeDialog();
     if (!f.reportValidity()) return;
     const v = draft; if (!v.name.trim()) return toast('Give the startup a name', '', true);
+    v.website = (v.website || '').trim().replace(/^(?!https?:\/\/)(?=.)/i, 'https://');   // "company.com" → "https://company.com"
+    if (v.website && !/^https?:\/\/[^\s.]+\.[^\s]+$/i.test(v.website)) return toast('Check the website address', v.website, true);
     if (!v.contacts.some(c => c.primary)) v.contacts[0].primary = true;
     const rec = {...v, name:v.name.trim()}; delete rec._new;
     const prevS = state.startups.find(x => x.id === rec.id);
-    recordChange('startup', rec.id, prevS ? 'updated' : 'created', rec.name, prevS ? diffFields(prevS, rec, ['name', 'sector', 'notes', 'attendance', 'contacts']) : {});
+    recordChange('startup', rec.id, prevS ? 'updated' : 'created', rec.name, prevS ? diffFields(prevS, rec, ['name', 'sector', 'website', 'notes', 'attendance', 'contacts']) : {});
     upsert(state.startups, rec); finish(v._new ? 'Startup added' : 'Startup saved', missingContact(rec) ? 'still no email or phone number' : '');
   },
   alloc(f, fd) {

@@ -1231,3 +1231,7 @@ dialog.dlg.search-pop[open]{display:flex}
 .banner.clash-warn .cbox input{accent-color:var(--amber)}
 .checks .cbox.clash{color:var(--amber)}
 .clash-ok{color:var(--success)}
+.s-site{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-site svg{width:12px;height:12px;flex:none;opacity:.7}
+.s-site-cell{max-width:200px}
+.card-foot .s-site{margin-right:auto}

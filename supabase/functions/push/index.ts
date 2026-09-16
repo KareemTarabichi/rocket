@@ -111,10 +111,11 @@ Deno.serve(async (req) => {
       if (!d || d.owner === me.id) return json({ ok: true, sent: 0 });
       return json({ ok: true, sent: await sendTo([d.owner], { title: `New design request: ${d.title}`, body: `Due ${fmtDay(d.due)}${d.deliverables ? ` · ${d.deliverables}` : ''} · from ${me.name}`, url: `${SITE_URL}/?view=events`, tag: `design-${d.id}` }) });
     }
-    case 'task': {   // follow-up assigned to someone else by leadership
-      if (!OVERSIGHT.includes(me.role)) return json({ error: 'Only leadership assigns follow-ups to others.' }, 403);
+    case 'task': {   // a follow-up someone has just been given
       const { data: t } = await db.from('tasks').select('*').eq('id', id).maybeSingle();
-      if (!t || t.owner === me.id) return json({ ok: true, sent: 0 });
+      if (!t) return json({ error: 'Follow-up not found.' }, 404);
+      if (!OVERSIGHT.includes(me.role) && t.created_by !== me.id) return json({ error: 'You can only notify people about follow-ups you assign.' }, 403);
+      if (t.owner === me.id) return json({ ok: true, sent: 0 });
       return json({ ok: true, sent: await sendTo([t.owner], { title: `New follow-up: ${t.title}`, body: `Due ${fmtDay(t.due)} · from ${me.name}`, url: `${SITE_URL}/?view=deadlines`, tag: `task-${t.id}` }) });
     }
     case 'idea': {   // people newly made owner or collaborator on an idea

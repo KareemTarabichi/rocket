@@ -159,6 +159,14 @@ Admin is a platform permission on top of a club role. It does **not** grant club
 - The owner invites **collaborators**. Owner and collaborators can edit the idea and post **contributions** — a thread of mini sub-ideas with an optional headline. Everyone can read them.
 - Only the **owner or an admin** can delete an idea. Contributions can be deleted by their author, the idea owner, or an admin.
 
+## Startup Directory
+
+Each startup can have a **website**. Type `company.com` or a full address; Rocket stores it with `https://` and shows it as a link in the table, the cards and the phone list. It's searchable, and it's included in the change history.
+
+## Follow-ups (Deadlines)
+
+Anyone can add a follow-up and assign it to anyone — it used to be leadership only. Open one from Deadlines to change its title, due date, what it relates to, or **who it's assigned to**. Whoever the task is handed to gets a phone notification and an entry in their bell. A follow-up is editable by the person it's assigned to, the person who assigned it, and leadership; those three (plus leadership) are also the only ones who see it.
+
 ## Notifications
 
 The bell (top right of every page, or the top bar on phones) lists what needs *you*: your deadlines that are overdue or due within a day, meetings today or tomorrow, new design work, reviews waiting for PR, ideas to review (leadership), reimbursements to approve (budget roles) and startup deletions to decide (admins and the President). Meeting invitations, changes and cancellations addressed to you appear underneath. The unread marker is kept per browser.

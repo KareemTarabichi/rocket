@@ -258,7 +258,8 @@ function vIdeas() {
 /* ================= deadlines ================= */
 function deadlineRow(x) {
   const n = daysFrom(x.due), ok = canTask(x), status = x.done ? 'Completed' : n < 0 ? 'Overdue' : n === 0 ? 'Due today' : 'Upcoming';
-  const openAct = x.src === 'req' ? `data-act="open-event" data-id="${x.eventId}"` : x.src === 'idea' ? `data-act="open-idea" data-id="${x.id}"` : x.src === 'design' ? `data-act="open-design" data-id="${x.id}"` : '';
+  const openAct = x.src === 'req' ? `data-act="open-event" data-id="${x.eventId}"` : x.src === 'idea' ? `data-act="open-idea" data-id="${x.id}"` : x.src === 'design' ? `data-act="open-design" data-id="${x.id}"`
+    : x.src === 'task' && canEditTask(state.tasks.find(t => t.id === x.id)) ? `data-act="edit-task" data-id="${x.id}"` : '';
   return `<div class="dli ${x.done ? 'done' : n < 0 ? 'is-over' : n === 0 ? 'is-today' : ''}">
     <span class="c"><input type="checkbox" data-change="complete" data-key="${esc(x.key)}" ${x.done ? 'checked' : ''} ${ok ? '' : 'disabled'} aria-label="Mark ${esc(x.title)} ${x.done ? 'not done' : 'done'}" title="${ok ? '' : 'Only the owner or leadership can complete this'}"></span>
     <div class="tt" style="min-width:0"><div class="t" ${openAct} style="${openAct ? 'cursor:pointer' : ''}">${esc(x.title)}</div><div class="rel"><span class="src">${x.srcLabel}</span>${esc(x.related)}</div></div>

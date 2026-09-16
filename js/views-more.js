@@ -2,20 +2,22 @@
 /* ================= startup directory ================= */
 const ratingCell = r => r == null ? '<span class="faint">—</span>' : `<span class="rating ${r >= 8 ? 'hi' : r < 6 ? 'lo' : ''}"><span class="num">${r}</span><span class="bar"><i style="width:${r * 10}%"></i></span></span>`;
 const attTags = s => s.attendance.length ? s.attendance.map(a => `<span class="tag rise">${esc(a)}</span>`).join(' ') : '<span class="faint">Never</span>';
+// A startup's site, opened in a new tab. The row itself opens the record, so the link stops the click.
+const siteLink = (s, label) => s.website ? `<a class="s-site" href="${esc(s.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="${esc(s.website)}">${label || esc(s.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''))}${ic('ext')}</a>` : '';
 const contactFlag = s => s.deletion ? '<span class="due over">Deletion pending</span>' : missingContact(s) ? '<span class="due soon">No contact</span>' : '<span class="due done">Reachable</span>';
 function startupResults() {
   const list = filteredStartups(), f = filters.startups;
   if (!list.length) return '<div class="panel empty">No startups match. Clear the filters or search for something else.</div>';
   if (isM()) return `<ul class="s-list">${list.map(s => { const p = primaryContact(s); return `
     <li class="s-item" data-act="open-startup" data-id="${s.id}"><div class="n"><span>${esc(s.name)}</span>${s.attendance.map(a => `<span class="tag rise">${esc(a)}</span>`).join('')}</div><div>${ratingCell(s.rating)}</div>
-      <div class="sub"><span>${esc(s.sector || '—')}</span><span class="faint">·</span><span>${p?.name ? esc(p.name) : '<span class="faint">No contact</span>'}</span>${s.deletion ? '<span class="review" style="margin-left:auto;color:var(--ember)">Deletion pending</span>' : missingContact(s) ? '<span class="review" style="margin-left:auto">Missing details</span>' : ''}</div></li>`; }).join('')}</ul>`;
+      <div class="sub"><span>${esc(s.sector || '—')}</span><span class="faint">·</span><span>${p?.name ? esc(p.name) : '<span class="faint">No contact</span>'}</span>${siteLink(s, 'Website')}${s.deletion ? '<span class="review" style="margin-left:auto;color:var(--ember)">Deletion pending</span>' : missingContact(s) ? '<span class="review" style="margin-left:auto">Missing details</span>' : ''}</div></li>`; }).join('')}</ul>`;
   if (f.view === 'cards') return `<div class="cards">${list.map(s => { const p = primaryContact(s); return `
     <button class="card" data-act="open-startup" data-id="${s.id}"><div style="display:flex;justify-content:space-between;gap:8px"><h3>${esc(s.name)}</h3>${ratingCell(s.rating)}</div>
       <span class="tag" style="align-self:flex-start">${esc(s.sector || '—')}</span>
       <div class="desc">${s.notes ? esc(s.notes) : '<span class="faint">No notes yet.</span>'}</div>
-      <div class="card-foot"><span>${p?.name ? esc(p.name) : 'No contact'}</span>${contactFlag(s)}</div></button>`; }).join('')}</div>`;
-  return `<div class="table-wrap"><table><thead><tr><th>Startup</th><th>Sector</th><th>Rating</th><th>Primary contact</th><th>Phone</th><th>Email</th><th>Attended</th><th>Contact details</th></tr></thead><tbody>${list.map(s => { const p = primaryContact(s);
-    return `<tr data-act="open-startup" data-id="${s.id}"><td><div class="name">${esc(s.name)}</div>${s.notes ? `<div class="desc">${esc(s.notes)}</div>` : ''}</td><td style="white-space:nowrap">${esc(s.sector || '—')}</td><td>${ratingCell(s.rating)}</td>
+      <div class="card-foot"><span>${p?.name ? esc(p.name) : 'No contact'}</span>${siteLink(s, 'Website')}${contactFlag(s)}</div></button>`; }).join('')}</div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>Startup</th><th>Sector</th><th>Website</th><th>Rating</th><th>Primary contact</th><th>Phone</th><th>Email</th><th>Attended</th><th>Contact details</th></tr></thead><tbody>${list.map(s => { const p = primaryContact(s);
+    return `<tr data-act="open-startup" data-id="${s.id}"><td><div class="name">${esc(s.name)}</div>${s.notes ? `<div class="desc">${esc(s.notes)}</div>` : ''}</td><td style="white-space:nowrap">${esc(s.sector || '—')}</td><td class="s-site-cell">${siteLink(s) || '<span class="faint">—</span>'}</td><td>${ratingCell(s.rating)}</td>
       <td style="white-space:nowrap">${p?.name ? esc(p.name) : '<span class="faint">—</span>'}${s.contacts.length > 1 ? ` <span class="faint">+${s.contacts.length - 1}</span>` : ''}</td>
       <td class="mono" style="font-size:12.5px;white-space:nowrap">${p?.phone ? esc(p.phone) : '<span class="faint">—</span>'}</td><td class="mono" style="font-size:12.5px">${p?.email ? esc(p.email) : '<span class="faint">—</span>'}</td>
       <td style="white-space:nowrap">${attTags(s)}</td><td>${contactFlag(s)}</td></tr>`; }).join('')}</tbody></table></div>`;
